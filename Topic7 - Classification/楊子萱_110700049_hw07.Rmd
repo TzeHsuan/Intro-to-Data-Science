@@ -1,0 +1,1187 @@
+---
+title: "楊子萱_110700049_hw07"
+author: "楊子萱"
+date: "2023-11-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+In order to conduct classification models, I decided to use the dataset about **Sleep health and lifestyle**. The classification models I will be using are listed below. To prevent the problem of **over-fitting**, I will split the data into **training** set, **validation** set, and **test** set. I will not only **explain** the results I obtain, but also **compare** the results between different models. Last but not least, I will be discussing some possible problems for future studies.
+
+# Classification Algorithm
+
+    1. Multinomial Logistic Regression
+    
+    2. Naive Bayes
+    
+    3. SVM with Large Margin Linear Classifier
+    
+    4. SVM with Soft Margin Linear Classifier
+    
+    5. Nonlinear SVM with a RBS Kernel
+    
+    6. Nonlinear SVM with a Polynomial Kernel
+    
+    7. Nonlinear SVM with a Gaussian Kernel
+    
+    8. Nonlinear SVM with a Sigmoid Kernel
+    
+    9. K-Nearest Neighbor KNN
+    
+    10. Random Forest
+    
+    11. Decision Tree
+    
+    12. Linear Discriminant Analysis LDA
+  
+## Check Type & Structure of Data 
+
+I will be changing the **character** type variables into **integer**.
+
+**Gender**: Male->0, Female->1
+
+**Sleep.Disorder**: None->1, Sleep Apnea->2, Insomnia->3
+
+**BMI.Category**: Normal, Normal Weight->1, Overweight->2, Obese->3
+
+**Occupations**: Software Engineer->1, Doctor->2, Sales Representative->3, Teacher->4, Nurse->5, Engineer->6, Accountant->7, Scientist->8, Lawyer->9, Salesperson->10, Manager->11
+
+```{r}
+data = read.csv(file = 'Sleep_health_and_lifestyle_dataset.csv', header = TRUE, sep = ',')
+
+data$Gender <- ifelse(data$Gender == "Male", 0, 1)
+data$Sleep.Disorder <- factor(data$Sleep.Disorder, levels = c("None", "Sleep Apnea", "Insomnia"), labels = c(0, 1, 2))
+data$Sleep.Disorder <- as.numeric(data$Sleep.Disorder)
+data$BMI.Category[data$BMI.Category == "Normal Weight"] <- "Normal"
+data$BMI.Category <- factor(data$BMI.Category, levels = c("Normal", "Overweight", "Obese"), labels = c(0, 1, 2))
+data$BMI.Category <- as.numeric(data$BMI.Category)
+occupations <- c("Software Engineer", "Doctor", "Sales Representative", "Teacher", "Nurse", "Engineer", "Accountant", "Scientist", "Lawyer", "Salesperson", "Manager")
+data$Occupation <- as.numeric(factor(data$Occupation, levels = occupations))
+
+class(data)
+str(data)
+cat("Number of rows with missing values:", sum(!complete.cases(data)), "\n")
+
+missing_counts <- colSums(is.na(data))
+columns_with_missing <- sum(missing_counts > 0)
+cat("Number of columns with missing values:", columns_with_missing, "\n")
+
+if (columns_with_missing > 0) {
+  cat("Columns with missing values:", paste(names(missing_counts[missing_counts > 0]), collapse = ", "), "\n")
+}
+```
+
+# Split into Sets
+
+I will split the data into **60%** training, **20%** validation, and **20%** test sets.
+```{r}
+set.seed(123)
+
+total_rows <- nrow(data)
+indices <- sample(1:total_rows, total_rows)
+
+train_fraction <- 0.6
+validation_fraction <- 0.2
+test_fraction <- 0.2
+
+train_size <- floor(train_fraction * total_rows)
+validation_size <- floor(validation_fraction * total_rows)
+
+train <- data[indices[1:train_size], ]
+valid <- data[indices[(train_size + 1):(train_size + validation_size)], ]
+test <- data[indices[(train_size + validation_size + 1):total_rows], ]
+
+n_train <- nrow(train)
+n_valid <- nrow(valid)
+n_test <- nrow(test)
+
+cat("Number of data points in the training set:", n_train, "\n")
+cat("Number of data points in the validation set:", n_valid, "\n")
+cat("Number of data points in the test set:", n_test, "\n")
+```
+
+
+## Summary of Correlation
+```{r}
+library(corrplot)
+
+num_col <- sapply(train, function(x) is.numeric(x))
+num <- train[, num_col]
+
+correlation_matrix <- cor(num, use = "complete.obs")
+
+corrplot(correlation_matrix,
+         method = "color",  
+         type = "upper", 
+         tl.cex = 0.7,   
+         tl.col = "black" 
+)
+```
+
+# Classification Algorithm
+
+Since I wanted to find out what affects the **quality of sleep**, this will be my target variable. Then, I chose the variables according to my domain knowledge and some suggestions from the correlation matrix. The chosen feature variables are **"Sleep.Duration"**, **"Age**, **"Gender**, **"Stress.Level"**, **"Sleep.Disorder"**, and **"Heart.Rate"**.
+
+## 1. Multinomial Logistic Regression
+### Training & Evaluation
+```{r}
+library(nnet)
+library(irr)
+library(Metrics)
+library(pROC)
+
+model <- multinom(Quality.of.Sleep ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate, data = train)
+
+train$Quality.of.Sleep <- factor(train$Quality.of.Sleep)
+valid$Quality.of.Sleep <- factor(valid$Quality.of.Sleep, levels = levels(train$Quality.of.Sleep))
+
+predicted_classes <- predict(model, newdata = valid, type = "class")
+predicted_prob <- predict(model, newdata = valid, type = "probs")
+true_labels <- as.numeric(factor(valid$Quality.of.Sleep))
+
+confusion_matrix <- table(Actual = valid$Quality.of.Sleep, Predicted = predicted_classes)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+roc <- multiclass.roc(valid$Quality.of.Sleep, predicted_prob)
+class_names <- levels(valid$Quality.of.Sleep)
+
+par(mfrow = c(2, 3))
+auc_values <- numeric(ncol(predicted_prob))
+for (i in 1:ncol(predicted_prob)) {
+  class_labels <- ifelse(valid$Quality.of.Sleep == levels(valid$Quality.of.Sleep)[i], 1, 0)
+  roc_curve <- roc(class_labels, predicted_prob[, i])
+  auc_values[i] <- auc(roc_curve$sensitivities, 1 - roc_curve$specificities)
+  plot(roc_curve, col = rainbow(6)[i], main = paste("ROC Curve - Class", i), col.main = "skyblue")
+  cat("AUC - Class", i, ":", auc_values[i], "\n")
+}
+par(mfrow = c(1, 1))
+
+ks_statistic <- numeric(ncol(predicted_prob))
+for (i in 1:ncol(predicted_prob)) {
+  roc_curve <- roc(ifelse(true_labels == i, 1, 0), predicted_prob[, i])
+  ks_statistic[i] <- max(abs(roc_curve$sensitivities - roc_curve$specificities))
+}
+
+plot(ks_statistic, type = "o", pch = 16, col = "skyblue", xlab = "Class", ylab = "KS Statistic", main = "Kolmogorov-Smirnov (KS) Plot")
+
+print(confusion_matrix)
+cat("Accuracy:", accuracy, "\n")
+cat("Overall Precision:", overall_precision, "\n")
+cat("Overall Recall:", overall_recall, "\n")
+cat("Overall F1-Score:", overall_f1_score, "\n")
+cat("Cohen's Kappa:", kappa, "\n")
+cat("Jaccard Index:", jaccard_index, "\n")
+```
+Out of the 74 valid data points, we can see from the confusion matrix that there're only **2** observations that have predictions in the incorrect class. These points are actual 5 -> predict 6 and actual 8 -> predict 7. On top of that, by looking at the performance metrics, this model is **performing well**. There is  **high** overall accuracy and high precision, recall, F1-Score, and Jaccard index. Nevertheless, the **negative** value of Cohen's Kappa suggests that the **agreement is worse** than what would be expected by chance. This infers that perhaps the **reliability** of the model's predictions needs to be taken into account.
+
+Based on the ROC curve and the AUC values, it can be inferred that class **1**, **2**, **3**, **4**, and **6** are perfect classifiers, while class **5** are random classifiers. Furthermore, The KS plot illustrates that all the classes have a KS value of 1, meaning the model is **perfectly distinguishing** between the positive and negative classes. There may be some little **overfitting** problems.
+
+### Test Set Evaluation
+```{r}
+test$Quality.of.Sleep <- factor(test$Quality.of.Sleep, levels = levels(train$Quality.of.Sleep))
+
+predicted_test <- predict(model, newdata = test, type = "probs")
+predicted_classes_test <- predict(model, newdata = test, type = "class")
+true_labels_test <- as.numeric(factor(test$Quality.of.Sleep))
+
+confusion_matrix_test <- table(Actual = test$Quality.of.Sleep, Predicted = predicted_classes_test)
+
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision_test <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall_test <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score_test <- 2 * (precision_test * recall_test) / (precision_test + recall_test)
+overall_precision_test <- mean(precision_test, na.rm = TRUE)
+overall_recall_test <- mean(recall_test, na.rm = TRUE)
+overall_f1_score_test <- mean(f1_score_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_test)$value
+
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+roc <- multiclass.roc(test$Quality.of.Sleep, predicted_test)
+
+par(mfrow = c(2, 3))
+auc_values <- numeric(ncol(predicted_test))
+for (i in 1:ncol(predicted_test)) {
+  class_labels <- ifelse(test$Quality.of.Sleep == levels(test$Quality.of.Sleep)[i], 1, 0)
+  roc_curve <- roc(class_labels, predicted_test[, i])
+  auc_values[i] <- auc(roc_curve$sensitivities, 1 - roc_curve$specificities)
+  plot(roc_curve, col = rainbow(6)[i], main = paste("ROC Curve - Class", i), col.main = "navyblue")
+  cat("AUC - Class", i, ":", auc_values[i], "\n")
+}
+par(mfrow = c(1, 1))
+
+ks_statistic_test <- numeric(ncol(predicted_test))
+for (i in 1:ncol(predicted_test)) {
+  roc_curve_test <- roc(ifelse(true_labels_test == i, 1, 0), predicted_test[, i])
+  ks_statistic_test[i] <- max(abs(roc_curve_test$sensitivities - roc_curve_test$specificities))
+}
+
+plot(ks_statistic_test, type = "o", pch = 16, col = "navyblue", xlab = "Class", ylab = "KS Statistic", main = "Kolmogorov-Smirnov (KS) Plot - Test Set")
+
+print(confusion_matrix_test)
+cat("Accuracy (Test Set):", accuracy_test, "\n")
+cat("Overall Precision (Test Set):", overall_precision_test, "\n")
+cat("Overall Recall (Test Set):", overall_recall_test, "\n")
+cat("Overall F1-Score (Test Set):", overall_f1_score_test, "\n")
+cat("Cohen's Kappa (Test Set):", kappa_test, "\n")
+cat("Jaccard Index (Test Set):", jaccard_index, "\n")
+```
+
+Out of the 76 test data points, we can see from the confusion matrix that there're **4** observations that have predictions in the incorrect class. These points are actual 5 -> predict 4, actual 7 -> predict 5, and 2 actual 8 -> predict 7. On top of that, by looking at the performance metrics, this model is **performing well**, but **not as well as the validation set**. The overall accuracy, precision, recall, F1-Score, and Jaccard index are not as good. Plus, the value of Cohen's Kappa is still **negative**, so the **reliability** of the model's predictions needs to be taken into account.
+
+Based on the ROC curve and the AUC values, it can be inferred that class **1**, **2**, **3**, and **6** are good classifiers, as they have high AUC values, and they have a curve that goes straight up the left side and then straight across the top. On the other hand, class **4** and **5** are random classifiers. Furthermore, The KS plot illustrates that all the classes have a KS value of 1, meaning the model is **perfectly distinguishing** between the positive and negative classes. There may be some little **overfitting** problems.
+
+
+## 2. Naive Bayes
+### Training & Evaluation
+```{r}
+library(naivebayes)
+
+model_nb <- naive_bayes(Quality.of.Sleep ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate, data = train)
+
+predicted_nb <- predict(model_nb, newdata = valid, type = "prob")
+predicted_classes_nb <- predict(model_nb, newdata = valid, type = "class")
+
+roc_obj_nb <- multiclass.roc(valid$Quality.of.Sleep, predicted_nb)
+auc_values <- numeric(ncol(predicted_nb))
+par(mfrow = c(2, 3))
+for (i in 1:ncol(predicted_nb)) {
+  class_labels <- ifelse(valid$Quality.of.Sleep == levels(valid$Quality.of.Sleep)[i], 1, 0)
+  roc_curve <- roc(class_labels, predicted_nb[, i])
+  auc_values[i] <- auc(roc_curve$sensitivities, 1 - roc_curve$specificities)
+  plot(roc_curve, col = rainbow(6)[i], main = paste("ROC Curve - Class", i), col.main = "navyblue")
+  cat("AUC - Class", i, ":", auc_values[i], "\n")
+}
+par(mfrow = c(1, 1))
+
+true_labels_nb <- as.numeric(factor(valid$Quality.of.Sleep))
+confusion_matrix_nb <- table(Actual = valid$Quality.of.Sleep, Predicted = predicted_classes_nb)
+
+accuracy_nb <- sum(diag(confusion_matrix_nb)) / sum(confusion_matrix_nb)
+precision_nb <- diag(confusion_matrix_nb) / rowSums(confusion_matrix_nb)
+recall_nb <- diag(confusion_matrix_nb) / colSums(confusion_matrix_nb)
+f1_score_nb <- 2 * (precision_nb * recall_nb) / (precision_nb + recall_nb)
+overall_precision_nb <- mean(precision_nb, na.rm = TRUE)
+overall_recall_nb <- mean(recall_nb, na.rm = TRUE)
+overall_f1_score_nb <- mean(f1_score_nb, na.rm = TRUE)
+kappa_nb <- kappam.fleiss(confusion_matrix_nb)$value
+
+intersection <- sum(diag(confusion_matrix_nb))
+union <- sum(confusion_matrix_nb) + sum(confusion_matrix_nb) - sum(diag(confusion_matrix_nb))
+jaccard_index <- intersection / union
+
+ks_statistic_nb <- numeric(ncol(predicted_nb))
+for (i in 1:ncol(predicted_nb)) {
+  roc_curve_nb <- roc(ifelse(true_labels_nb == i, 1, 0), predicted_nb[, i])
+  ks_statistic_nb[i] <- max(abs(roc_curve_nb$sensitivities - roc_curve_nb$specificities))
+}
+plot(ks_statistic_nb, type = "o", pch = 16, col = "skyblue", xlab = "Class", ylab = "KS Statistic", main = "Kolmogorov-Smirnov (KS) Plot - Naive Bayes")
+
+print(confusion_matrix_nb)
+cat("Accuracy (Naive Bayes):", accuracy_nb, "\n")
+cat("Overall Precision (Naive Bayes):", overall_precision_nb, "\n")
+cat("Overall Recall (Naive Bayes):", overall_recall_nb, "\n")
+cat("Overall F1-Score (Naive Bayes):", overall_f1_score_nb, "\n")
+cat("Cohen's Kappa (Naive Bayes):", kappa_nb, "\n")
+cat("Jaccard Index (Naive Bayes):", jaccard_index, "\n")
+```
+
+Out of the 74 valid data points, we can see from the confusion matrix that there're **7** observations that have predictions in the incorrect class. On top of that, by looking at the performance metrics, this model is **performing well**. There is  **high** overall accuracy and high precision, recall, F1-Score, and Jaccard index. Nevertheless, the **negative** value of Cohen's Kappa suggests that the **agreement is worse** than what would be expected by chance. This infers that perhaps the **reliability** of the naive bayes model's predictions needs to be taken into account.
+
+Based on the ROC curve and the AUC values, it can be inferred that class **1**, **2**, and **6** are perfect classifiers, while class **3**, **4**, and **5** are random classifiers. Furthermore, The KS plot illustrates that all the classes have a KS value of 1, meaning the model is **perfectly distinguishing** between the positive and negative classes. Yet, this may imply that there may be some little **overfitting** problems.
+
+### Test Set Evaluation
+```{r}
+predicted_nb_test <- predict(model_nb, newdata = test, type = "prob")
+predicted_classes_nb_test <- predict(model_nb, newdata = test, type = "class")
+
+roc_obj_nb_test <- multiclass.roc(test$Quality.of.Sleep, predicted_nb_test)
+auc_values <- numeric(ncol(predicted_nb_test))
+par(mfrow = c(2, 3))
+for (i in 1:ncol(predicted_nb_test)) {
+  class_labels <- ifelse(test$Quality.of.Sleep == levels(test$Quality.of.Sleep)[i], 1, 0)
+  roc_curve <- roc(class_labels, predicted_nb_test[, i])
+  auc_values[i] <- auc(roc_curve$sensitivities, 1 - roc_curve$specificities)
+  plot(roc_curve, col = rainbow(6)[i], main = paste("ROC Curve - Class", i), col.main = "navyblue")
+  cat("AUC - Class", i, ":", auc_values[i], "\n")
+}
+par(mfrow = c(1, 1))
+
+true_labels_nb_test <- as.numeric(factor(test$Quality.of.Sleep))
+confusion_matrix_nb_test <- table(Actual = test$Quality.of.Sleep, Predicted = predicted_classes_nb_test)
+
+accuracy_nb_test <- sum(diag(confusion_matrix_nb_test)) / sum(confusion_matrix_nb_test)
+precision_nb_test <- diag(confusion_matrix_nb_test) / rowSums(confusion_matrix_nb_test)
+recall_nb_test <- diag(confusion_matrix_nb_test) / colSums(confusion_matrix_nb_test)
+f1_score_nb_test <- 2 * (precision_nb_test * recall_nb_test) / (precision_nb_test + recall_nb_test)
+overall_precision_nb_test <- mean(precision_nb_test, na.rm = TRUE)
+overall_recall_nb_test <- mean(recall_nb_test, na.rm = TRUE)
+overall_f1_score_nb_test <- mean(f1_score_nb_test, na.rm = TRUE)
+kappa_nb_test <- kappam.fleiss(confusion_matrix_nb_test)$value
+
+intersection <- sum(diag(confusion_matrix_nb_test))
+union <- sum(confusion_matrix_nb_test) + sum(confusion_matrix_nb_test) - sum(diag(confusion_matrix_nb_test))
+jaccard_index <- intersection / union
+
+ks_statistic_nb_test <- numeric(ncol(predicted_nb_test))
+for (i in 1:ncol(predicted_nb_test)) {
+  roc_curve_nb_test <- roc(ifelse(true_labels_nb_test == i, 1, 0), predicted_nb_test[, i])
+  ks_statistic_nb_test[i] <- max(abs(roc_curve_nb_test$sensitivities - roc_curve_nb_test$specificities))
+}
+plot(ks_statistic_nb_test, type = "o", pch = 16, col = "navyblue", xlab = "Class", ylab = "KS Statistic", main = "Kolmogorov-Smirnov (KS) Plot - Naive Bayes (Test Set)")
+
+print(confusion_matrix_nb_test)
+cat("Accuracy (Naive Bayes - Test Set):", accuracy_nb_test, "\n")
+cat("Overall Precision (Naive Bayes - Test Set):", overall_precision_nb_test, "\n")
+cat("Overall Recall (Naive Bayes - Test Set):", overall_recall_nb_test, "\n")
+cat("Overall F1-Score (Naive Bayes - Test Set):", overall_f1_score_nb_test, "\n")
+cat("Cohen's Kappa (Naive Bayes - Test Set):", kappa_nb_test, "\n")
+cat("Jaccard Index (Naive Bayes - Test Set):", jaccard_index, "\n")
+```
+
+Out of the 76 test data points, we can see from the confusion matrix that there're **14** observations that have predictions in the incorrect class. On top of that, by looking at the performance metrics, this model is **alright**, but **not as well as the validation set**. The overall accuracy, precision, recall, F1-Score, and Jaccard index are not as good. Additionally, the value of Cohen's Kappa is still **negative**, so the **reliability** of the model's predictions needs to be taken into account.
+
+Based on the ROC curve and the AUC values, it can be inferred that class **1**, **2**, and **6** are good classifiers, as they have high AUC values, and they have a curve that goes straight up the left side and then straight across the top. On the other hand, class **3**, **4** and **5** are random classifiers. Furthermore, The KS plot illustrates that all the classes have a KS value of 1, meaning the model is **perfectly distinguishing** between the positive and negative classes. There may be some little **overfitting** problems.
+
+## 3. Support Vector Machines Using Large Margin Linear Classifier
+### Training & Evaluation
+```{r}
+library(e1071)
+
+train$Quality.of.Sleep <- as.numeric(train$Quality.of.Sleep)
+valid$Quality.of.Sleep <- as.numeric(valid$Quality.of.Sleep)
+
+svm_model <- svm(Quality.of.Sleep ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate,
+                 data = train, type = "C-classification", kernel = "linear", decision.values = TRUE, cost = 0.1)
+
+summary(svm_model)
+
+predicted_classes_svm <- predict(svm_model, newdata = valid)
+
+confusion_matrix_svm <- table(Actual = valid$Quality.of.Sleep, Predicted = predicted_classes_svm)
+
+accuracy_svm <- sum(diag(confusion_matrix_svm)) / sum(confusion_matrix_svm)
+precision_svm <- diag(confusion_matrix_svm) / rowSums(confusion_matrix_svm)
+recall_svm <- diag(confusion_matrix_svm) / colSums(confusion_matrix_svm)
+f1_score_svm <- 2 * (precision_svm * recall_svm) / (precision_svm + recall_svm)
+overall_precision_svm <- mean(precision_svm, na.rm = TRUE)
+overall_recall_svm <- mean(recall_svm, na.rm = TRUE)
+overall_f1_score_svm <- mean(f1_score_svm, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_svm)$value
+
+intersection <- sum(diag(confusion_matrix_svm))
+union <- sum(confusion_matrix_svm) + sum(confusion_matrix_svm) - sum(diag(confusion_matrix_svm))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_svm)
+cat("Accuracy (Large-Margin SVM):", accuracy_svm, "\n")
+cat("Overall Precision (Large-Margin SVM):", overall_precision_svm, "\n")
+cat("Overall Recall (Large-Margin SVM):", overall_recall_svm, "\n")
+cat("Overall F1-Score (Large-Margin SVM):", overall_f1_score_svm, "\n")
+cat("Cohen's Kappa (Large-Margin SVM):", kappa_test, "\n")
+cat("Jaccard Index (Large-Margin SVM):", jaccard_index, "\n")
+```
+
+I set the cost to **0.1** to make it a large margin linear classifier.
+
+Out of the 74 valid data points, we can see from the confusion matrix that there're **10** observations that have predictions in the incorrect class. By looking at the performance metrics, this model is **performing alright**. There is  **high** overall accuracy and high precision, recall, F1-Score, and Jaccard index. Nevertheless, the **negative** value of Cohen's Kappa suggests that the **agreement is worse** than what would be expected by chance. This infers that perhaps the **reliability** of this SVM model's predictions needs to be taken into account. Yet, this may imply that there may be some little **overfitting** problems.
+
+
+### Test Set Evaluation
+```{r}
+test$Quality.of.Sleep <- as.numeric(test$Quality.of.Sleep)
+predicted_classes_svm_test <- predict(svm_model, newdata = test)
+
+confusion_matrix_svm_test <- table(Actual = test$Quality.of.Sleep, Predicted = predicted_classes_svm_test)
+
+accuracy_svm_test <- sum(diag(confusion_matrix_svm_test)) / sum(confusion_matrix_svm_test)
+precision_svm_test <- diag(confusion_matrix_svm_test) / rowSums(confusion_matrix_svm_test)
+recall_svm_test <- diag(confusion_matrix_svm_test) / colSums(confusion_matrix_svm_test)
+f1_score_svm_test <- 2 * (precision_svm_test * recall_svm_test) / (precision_svm_test + recall_svm_test)
+overall_precision_svm_test <- mean(precision_svm_test, na.rm = TRUE)
+overall_recall_svm_test <- mean(recall_svm_test, na.rm = TRUE)
+overall_f1_score_svm_test <- mean(f1_score_svm_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_svm_test)$value
+
+intersection <- sum(diag(confusion_matrix_svm_test))
+union <- sum(confusion_matrix_svm_test) + sum(confusion_matrix_svm_test) - sum(diag(confusion_matrix_svm_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_svm_test)
+cat("Accuracy (Large-Margin SVM - Test Set):", accuracy_svm_test, "\n")
+cat("Overall Precision (Large-Margin SVM - Test Set):", overall_precision_svm_test, "\n")
+cat("Overall Recall (Large-Margin SVM - Test Set):", overall_recall_svm_test, "\n")
+cat("Overall F1-Score (Large-Margin SVM - Test Set):", overall_f1_score_svm_test, "\n")
+cat("Cohen's Kappa (Large-Margin SVM - Test Set):", kappa_test, "\n")
+cat("Jaccard Index (Large-Margin SVM - Test Set):", jaccard_index, "\n")
+```
+
+Out of the 76 test data points, we can see from the confusion matrix that there're also **10** observations that have predictions in the incorrect class. On top of that, by looking at the performance metrics, this model is **alright**,and the figures are **about the same** as the metrics for validation set. The overall accuracy, precision, recall, F1-Score, and Jaccard index are **a little bit better**. Additionally, the value of Cohen's Kappa is **negative**, so the **reliability** of the model's predictions needs to be taken into account.
+
+
+## 4. Support Vector Machines Using Soft Margin Linear Classifier
+### Training & Evaluation
+```{r}
+soft_margin_svm_model <- svm(Quality.of.Sleep ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate,
+                             data = train, type = "C-classification", kernel = "linear", cost = 1)
+
+predicted_classes_soft_margin_svm <- predict(soft_margin_svm_model, newdata = valid)
+
+confusion_matrix_soft_margin_svm <- table(Actual = valid$Quality.of.Sleep, Predicted = predicted_classes_soft_margin_svm)
+
+accuracy_soft_margin_svm <- sum(diag(confusion_matrix_soft_margin_svm)) / sum(confusion_matrix_soft_margin_svm)
+precision_soft_margin_svm <- diag(confusion_matrix_soft_margin_svm) / rowSums(confusion_matrix_soft_margin_svm)
+recall_soft_margin_svm <- diag(confusion_matrix_soft_margin_svm) / colSums(confusion_matrix_soft_margin_svm)
+f1_score_soft_margin_svm <- 2 * (precision_soft_margin_svm * recall_soft_margin_svm) /
+                            (precision_soft_margin_svm + recall_soft_margin_svm)
+overall_precision_soft_margin_svm <- mean(precision_soft_margin_svm, na.rm = TRUE)
+overall_recall_soft_margin_svm <- mean(recall_soft_margin_svm, na.rm = TRUE)
+overall_f1_score_soft_margin_svm <- mean(f1_score_soft_margin_svm, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_soft_margin_svm)$value
+
+intersection <- sum(diag(confusion_matrix_soft_margin_svm))
+union <- sum(confusion_matrix_soft_margin_svm) + sum(confusion_matrix_soft_margin_svm) - sum(diag(confusion_matrix_soft_margin_svm))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_soft_margin_svm)
+cat("Accuracy (Soft-Margin SVM):", accuracy_soft_margin_svm, "\n")
+cat("Overall Precision (Soft-Margin SVM):", overall_precision_soft_margin_svm, "\n")
+cat("Overall Recall (Soft-Margin SVM):", overall_recall_soft_margin_svm, "\n")
+cat("Overall F1-Score (Soft-Margin SVM):", overall_f1_score_soft_margin_svm, "\n")
+cat("Cohen's Kappa (Soft-Margin SVM):", kappa_test, "\n")
+cat("Jaccard Index (Soft-Margin SVM):", jaccard_index, "\n")
+```
+
+I set the cost to **1** to make it a soft margin linear classifier.
+
+Out of the 74 valid data points, we can see from the confusion matrix that there're only **2** observations that have predictions in the incorrect class. By looking at the performance metrics, this model is **performing pretty good**. The overall accuracy, precision, recall, F1-Score, and Jaccard index are all **quite high** . Nevertheless, the **negative** value of Cohen's Kappa suggests that the **agreement is worse** than what would be expected by chance. This infers that perhaps the **reliability** of this SVM model's predictions needs to be taken into account.
+
+### Test Set Evaluation
+```{r}
+predicted_classes_svm_test <- predict(soft_margin_svm_model, newdata = test)
+
+confusion_matrix_svm_test <- table(Actual = test$Quality.of.Sleep, Predicted = predicted_classes_svm_test)
+
+accuracy_svm_test <- sum(diag(confusion_matrix_svm_test)) / sum(confusion_matrix_svm_test)
+precision_svm_test <- diag(confusion_matrix_svm_test) / rowSums(confusion_matrix_svm_test)
+recall_svm_test <- diag(confusion_matrix_svm_test) / colSums(confusion_matrix_svm_test)
+f1_score_svm_test <- 2 * (precision_svm_test * recall_svm_test) / (precision_svm_test + recall_svm_test)
+overall_precision_svm_test <- mean(precision_svm_test, na.rm = TRUE)
+overall_recall_svm_test <- mean(recall_svm_test, na.rm = TRUE)
+overall_f1_score_svm_test <- mean(f1_score_svm_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_svm_test)$value
+
+intersection <- sum(diag(confusion_matrix_svm_test))
+union <- sum(confusion_matrix_svm_test) + sum(confusion_matrix_svm_test) - sum(diag(confusion_matrix_svm_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_svm_test)
+cat("Accuracy (Soft-Margin SVM - Test Set):", accuracy_svm_test, "\n")
+cat("Overall Precision (Soft-Margin SVM - Test Set):", overall_precision_svm_test, "\n")
+cat("Overall Recall (Soft-Margin SVM - Test Set):", overall_recall_svm_test, "\n")
+cat("Overall F1-Score (Soft-Margin SVM - Test Set):", overall_f1_score_svm_test, "\n")
+cat("Cohen's Kappa (Soft-Margin SVM - Test Set):", kappa_test, "\n")
+cat("Jaccard Index (Soft-Margin SVM - Test Set):", jaccard_index, "\n")
+```
+
+Out of the 76 test data points, we can see from the confusion matrix that there're **6** observations that have predictions in the incorrect class. On top of that, by looking at the performance metrics, this model is **stll performing great**, but the figures are **a bit lower** than the metrics for validation set. Additionally, the value of Cohen's Kappa is still **negative**, so the **reliability** of the model's predictions needs to be taken into account. There may be some little **overfitting** issues.
+
+
+## 5. Nonlinear SVM with a Radial Basis Function (RBF) Kernel
+### Training & Evaluation
+```{r}
+predictors <- c("Sleep.Duration", "Age", "Gender", "Stress.Level", "Sleep.Disorder", "Heart.Rate")
+response_var <- "Quality.of.Sleep"
+
+nonlinear_svm_model <- svm(as.factor(Quality.of.Sleep) ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate, 
+                            data = train,
+                            type = "C-classification",
+                            kernel = "radial",
+                            decision.values = TRUE,
+                            cost = 0.1,
+                            gamma = 0.1)
+
+predicted_classes_nonlinear_svm <- predict(nonlinear_svm_model, newdata = valid)
+
+confusion_matrix_nonlinear_svm <- table(Actual = valid$Quality.of.Sleep, Predicted = predicted_classes_nonlinear_svm)
+
+accuracy_nonlinear_svm <- sum(diag(confusion_matrix_nonlinear_svm)) / sum(confusion_matrix_nonlinear_svm)
+precision_nonlinear_svm <- diag(confusion_matrix_nonlinear_svm) / rowSums(confusion_matrix_nonlinear_svm)
+recall_nonlinear_svm <- diag(confusion_matrix_nonlinear_svm) / colSums(confusion_matrix_nonlinear_svm)
+f1_score_nonlinear_svm <- 2 * (precision_nonlinear_svm * recall_nonlinear_svm) / (precision_nonlinear_svm + recall_nonlinear_svm)
+overall_precision_nonlinear_svm <- mean(precision_nonlinear_svm, na.rm = TRUE)
+overall_recall_nonlinear_svm <- mean(recall_nonlinear_svm, na.rm = TRUE)
+overall_f1_score_nonlinear_svm <- mean(f1_score_nonlinear_svm, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_nonlinear_svm)$value
+
+intersection <- sum(diag(confusion_matrix_nonlinear_svm))
+union <- sum(confusion_matrix_nonlinear_svm) + sum(confusion_matrix_nonlinear_svm) - sum(diag(confusion_matrix_nonlinear_svm))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_nonlinear_svm)
+cat("Accuracy (RBF SVM):", accuracy_nonlinear_svm, "\n")
+cat("Overall Precision (RBF SVM):", overall_precision_nonlinear_svm, "\n")
+cat("Overall Recall (RBF SVM):", overall_recall_nonlinear_svm, "\n")
+cat("Overall F1-Score (RBF SVM):", overall_f1_score_nonlinear_svm, "\n")
+cat("Cohen's Kappa (RBF SVM):", kappa, "\n")
+cat("Jaccard Index (RBF SVM):", jaccard_index, "\n")
+```
+```{r}
+library(ggplot2)
+
+feature1 <- valid$Sleep.Duration
+feature2 <- valid$Stress.Level
+
+plot_data <- data.frame(Sleep.Duration = feature1, Stress.Level = feature2, Quality.of.Sleep = as.factor(predicted_classes_nonlinear_svm))
+
+unique_values <- levels(plot_data$Quality.of.Sleep)
+
+color_palette <- c("green", "gray", "red", "blue")
+
+ggplot(plot_data, aes(x = Sleep.Duration, y = Stress.Level, color = Quality.of.Sleep)) +
+  geom_point() +
+  scale_color_manual(values = color_palette[1:length(unique_values)]) +
+  theme_classic() +
+  ggtitle("Scatter Plot with SVM Decision Boundary") +
+  labs(color = "Quality of Sleep") +
+  geom_point(data = plot_data[which(predicted_classes_nonlinear_svm == valid$Quality.of.Sleep), ], 
+             color = "red", size = 3, shape = 4, alpha = 0.5) + 
+  geom_point(data = plot_data[which(predicted_classes_nonlinear_svm != valid$Quality.of.Sleep), ], 
+             color = "blue", size = 3, shape = 4, alpha = 0.5) +  
+  geom_contour(data = plot_data, aes(z = as.numeric(Quality.of.Sleep)), color = "black", bins = 1)  
+```
+
+
+This is the model for Nonlinear SVM with a Radial Basis Function (RBF) Kernel. Both the value of cost and gamma are set to **0.1**. Out of the 76 test data points, we can see from the confusion matrix that there're **14** observations that have predictions in the incorrect class, which is relatively high. Based on the metrics, the model shows **relatively good accuracy**, but the **precision is low**, suggesting that there are **false positives** in the predictions. Furthermore, the value for **overall recall is high**, indicating that the model is effective at capturing actual positive instances. The Jaccard Index aligns with the accuracy, indicating a **good** overlap between predicted and actual positive instances. It is worth noting that the value for cohen' kappa is **negative**, meaning the **reliability** of the model's predictions needs to be taken into account.
+
+The scatter plot shows that better quality of sleep can be achieved with **more sleep duration** (more than 8), and **less stress level** (less or equal to 3).
+
+
+### Test Set Evaluation
+```{r}
+predicted_classes_svm_test <- predict(nonlinear_svm_model, newdata = test)
+
+confusion_matrix_svm_test <- table(Actual = test$Quality.of.Sleep, Predicted = predicted_classes_svm_test)
+
+accuracy_svm_test <- sum(diag(confusion_matrix_svm_test)) / sum(confusion_matrix_svm_test)
+precision_svm_test <- diag(confusion_matrix_svm_test) / rowSums(confusion_matrix_svm_test)
+recall_svm_test <- diag(confusion_matrix_svm_test) / colSums(confusion_matrix_svm_test)
+f1_score_svm_test <- 2 * (precision_svm_test * recall_svm_test) / (precision_svm_test + recall_svm_test)
+overall_precision_svm_test <- mean(precision_svm_test, na.rm = TRUE)
+overall_recall_svm_test <- mean(recall_svm_test, na.rm = TRUE)
+overall_f1_score_svm_test <- mean(f1_score_svm_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_svm_test)$value
+
+intersection <- sum(diag(confusion_matrix_svm_test))
+union <- sum(confusion_matrix_svm_test) + sum(confusion_matrix_svm_test) - sum(diag(confusion_matrix_svm_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_svm_test)
+cat("Accuracy (RBF SVM - Test Set):", accuracy_svm_test, "\n")
+cat("Overall Precision (RBF SVM - Test Set):", overall_precision_svm_test, "\n")
+cat("Overall Recall (RBF SVM - Test Set):", overall_recall_svm_test, "\n")
+cat("Overall F1-Score (RBF SVM - Test Set):", overall_f1_score_svm_test, "\n")
+cat("Cohen's Kappa (RBF SVM - Test Set):", kappa_test, "\n")
+cat("Jaccard Index (RBF SVM - Test Set):", jaccard_index, "\n")
+```
+```{r}
+feature1 <- test$Sleep.Duration
+feature2 <- test$Stress.Level
+
+plot_data <- data.frame(Sleep.Duration = feature1, Stress.Level = feature2, Quality.of.Sleep = as.factor(predicted_classes_svm_test))
+
+unique_values <- levels(plot_data$Quality.of.Sleep)
+
+color_palette <- c("green", "gray", "red", "blue")
+
+ggplot(plot_data, aes(x = Sleep.Duration, y = Stress.Level, color = Quality.of.Sleep)) +
+  geom_point() +
+  scale_color_manual(values = color_palette[1:length(unique_values)]) +
+  theme_classic() +
+  ggtitle("Scatter Plot with SVM Decision Boundary") +
+  labs(color = "Quality of Sleep") +
+  geom_point(data = plot_data[which(predicted_classes_nonlinear_svm == test$Quality.of.Sleep), ], 
+             color = "red", size = 3, shape = 4, alpha = 0.5) + 
+  geom_point(data = plot_data[which(predicted_classes_nonlinear_svm != test$Quality.of.Sleep), ], 
+             color = "blue", size = 3, shape = 4, alpha = 0.5) +  
+  geom_contour(data = plot_data, aes(z = as.numeric(Quality.of.Sleep)), color = "black", bins = 1)  
+```
+
+
+Out of the 76 test data points, we can see from the confusion matrix that there're **16** observations that have predictions in the incorrect class, which is more than that of validation set. Demonstrated by the performance metrics, this model has a **decent performance**. The figures are **a bit lower** than the metrics for validation set. Also, the overall precision is relatively lower, indicating that there're some false positive predictions. Additionally, the value of Cohen's Kappa is still **negative**, so the **reliability** of the model's predictions needs to be taken into account. It is suggested that may be some little **overfitting** issues.
+
+Although the points are a bit different, the scatter plot still ilustrates the same trend.
+
+
+## 6. Nonlinear SVM with a Polynomial Kernel
+### Training & Evaluation
+```{r}
+svm_regression_model <- svm(Quality.of.Sleep ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate,
+                            data = train,
+                            type = "eps-regression",
+                            kernel = "polynomial", 
+                            cost = 0.1)
+
+predicted_values_svm <- predict(svm_regression_model, newdata = valid)
+
+mse_svm <- mean((predicted_values_svm - valid$Quality.of.Sleep)^2)
+mae_svm <- mean(abs(predicted_values_svm - valid$Quality.of.Sleep))
+rsquared_svm<- 1 - (sum((valid$Quality.of.Sleep - predicted_values_svm)^2) / sum((valid$Quality.of.Sleep - mean(valid$Quality.of.Sleep))^2))
+mpe_svm <- mean(((valid$Quality.of.Sleep - predicted_values_svm) / valid$Quality.of.Sleep) * 100)
+rmse_svm <- sqrt(mean((predicted_values_svm - valid$Quality.of.Sleep)^2))
+mape_svm <- mean(abs((valid$Quality.of.Sleep - predicted_values_svm) / valid$Quality.of.Sleep) * 100)
+adjusted_rsquared_svm<- summary(lm(valid$Quality.of.Sleep ~ predicted_values_svm))$adj.r.squared
+
+cat("Mean Squared Error (MSE) for SVM with polynomial kernel:", mse_svm, "\n")
+cat("Mean Absolute Error (MAE)for SVM with polynomial kernel:", mae_svm, "\n")
+cat("R-squared for SVM with polynomial kernel:", rsquared_svm, "\n")
+cat("Mean Percentage Error (MPE) for SVM with polynomial kernel:", mpe_svm, "\n")
+cat("Root Mean Squared Error (RMSE) for SVM with polynomial kernel:", rmse_svm, "\n")
+cat("Mean Absolute Percentage Error (MAPE) for SVM with polynomial kernel:", mape_svm, "\n")
+cat("Adjusted R-squared for SVM with polynomial kernel:", adjusted_rsquared_svm, "\n")
+```
+
+Based on the above regression evaluation metrics, we can see that this model is **performing great**. The **low MSE and MAE values** indicate that the model's predictions are **closely align** with the actual values on average. The **high R-squared value** shows that this model can explain a substantial portion of the variance in the quality of sleep variable. Yet, the **negative MPE value** suggests a small underestimation in the predictions.
+
+### Test Set Evaluation
+```{r}
+predicted_values_svm_test <- predict(svm_regression_model, newdata = test)
+
+mse_svm_test <- mean((predicted_values_svm_test - test$Quality.of.Sleep)^2)
+mae_svm_test <- mean(abs(predicted_values_svm_test - test$Quality.of.Sleep))
+rsquared_svm_test <- 1 - (sum((test$Quality.of.Sleep - predicted_values_svm_test)^2) / sum((test$Quality.of.Sleep - mean(test$Quality.of.Sleep))^2))
+mpe_svm_test <- mean(((test$Quality.of.Sleep - predicted_values_svm_test) / test$Quality.of.Sleep) * 100)
+rmse_svm_test <- sqrt(mean((predicted_values_svm_test - test$Quality.of.Sleep)^2))
+mape_svm_test <- mean(abs((test$Quality.of.Sleep - predicted_values_svm_test) / test$Quality.of.Sleep) * 100)
+adjusted_rsquared_svm_test <- summary(lm(test$Quality.of.Sleep ~ predicted_values_svm_test))$adj.r.squared
+
+cat("MSE for SVM with polynomial kernel test set:", mse_svm_test, "\n")
+cat("MAE for SVM with polynomial kernel test set:", mae_svm_test, "\n")
+cat("R-squared for SVM with polynomial kernel test set:", rsquared_svm_test, "\n")
+cat("MPE for SVM with polynomial kernel test set:", mpe_svm_test, "\n")
+cat("RMSE for SVM with polynomial kernel test set:", rmse_svm_test, "\n")
+cat("MAPE for SVM with polynomial kernel test set:", mape_svm_test, "\n")
+cat("Adjusted R-squared for SVM with polynomial kernel test set:", adjusted_rsquared_svm_test, "\n")
+```
+
+Based on the above regression evaluation metrics on test set, we can see that this model is **well-performing**. The metrics have **similar** values to that of validation set. Yet, the **positive MPE value** indicates a slight **overestimation** on average. The SVM with a polynomial kernel performs slightly better on the validation set across most metrics. However, the performance on the test set is still good, indicating that the model generalizes well to new, unseen data, despite the fact that there may be minor **overfitting** problems.
+
+
+## 7. Nonlinear SVM with a Gaussian (RBF) Kernel
+### Training & Evaluation
+```{r}
+svm_regression_model <- svm(Quality.of.Sleep ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate,
+                                data = train,
+                                type = "eps-regression",
+                                kernel = "radial", 
+                                cost = 0.1)
+
+predicted_values_svm <- predict(svm_regression_model, newdata = valid)
+
+mse_svm <- mean((predicted_values_svm - valid$Quality.of.Sleep)^2)
+mae_svm <- mean(abs(predicted_values_svm - valid$Quality.of.Sleep))
+rsquared_svm <- 1 - (sum((valid$Quality.of.Sleep - predicted_values_svm)^2) / sum((valid$Quality.of.Sleep - mean(valid$Quality.of.Sleep))^2))
+mpe_svm <- mean(((valid$Quality.of.Sleep - predicted_values_svm) / valid$Quality.of.Sleep) * 100)
+rmse_svm <- sqrt(mean((predicted_values_svm - valid$Quality.of.Sleep)^2))
+mape_svm <- mean(abs((valid$Quality.of.Sleep - predicted_values_svm) / valid$Quality.of.Sleep) * 100)
+adjusted_rsquared_svm <- summary(lm(valid$Quality.of.Sleep ~ predicted_values_svm))$adj.r.squared
+
+cat("MSE for SVM with Gaussian kernel:", mse_svm, "\n")
+cat("MAE for SVM with Gaussian kernel:", mae_svm, "\n")
+cat("R-squared for SVM with Gaussian kernel:", rsquared_svm, "\n")
+cat("MPE for SVM with Gaussian kernel:", mpe_svm, "\n")
+cat("RMSE for SVM with Gaussian kernel:", rmse_svm, "\n")
+cat("MAPE for SVM with Gaussian kernel:", mape_svm, "\n")
+cat("Adjusted R-squared for SVM with Gaussian kernel:", adjusted_rsquared_svm, "\n")
+```
+
+Based on the above regression evaluation metrics, we can see that this model is **performing well**. The model performs well across most metrics, with **relatively low MSE, MAE, and RMSE**. Moreover, the R-squared value is quite close to 1, and this indicates a good fit to the data. Yet, the **negative MPE** suggests a tendency to **underestimate** the target variable on average.
+
+### Test Set Evaluation
+```{r}
+predicted_values_svm_test <- predict(svm_regression_model, newdata = test)
+
+mse_svm_test <- mean((predicted_values_svm_test - test$Quality.of.Sleep)^2)
+mae_svm_test <- mean(abs(predicted_values_svm_test - test$Quality.of.Sleep))
+rsquared_svm_test <- 1 - (sum((test$Quality.of.Sleep - predicted_values_svm_test)^2) / sum((test$Quality.of.Sleep - mean(test$Quality.of.Sleep))^2))
+mpe_svm_test <- mean(((test$Quality.of.Sleep - predicted_values_svm_test) / test$Quality.of.Sleep) * 100)
+rmse_svm_test <- sqrt(mean((predicted_values_svm_test - test$Quality.of.Sleep)^2))
+mape_svm_test <- mean(abs((test$Quality.of.Sleep - predicted_values_svm_test) / test$Quality.of.Sleep) * 100)
+adjusted_rsquared_svm_test <- summary(lm(test$Quality.of.Sleep ~ predicted_values_svm_test))$adj.r.squared
+
+cat("MSE for SVM with Gaussian kernel test set:", mse_svm_test, "\n")
+cat("MAE for SVM with Gaussian kernel test set:", mae_svm_test, "\n")
+cat("R-squared for SVM with Gaussian kernel test set:", rsquared_svm_test, "\n")
+cat("MPE for SVM with Gaussian kernel test set:", mpe_svm_test, "\n")
+cat("RMSE for SVM with Gaussian kernel test set:", rmse_svm_test, "\n")
+cat("MAPE for SVM with Gaussian kernel test set:", mape_svm_test, "\n")
+cat("Adjusted R-squared for SVM with Gaussian kernel test set:", adjusted_rsquared_svm_test, "\n")
+```
+
+According to the above regression evaluation metrics on test set, we can see that this model has a **decent performance**. The metrics have **similar** values to that of validation set. There's still a **negative MPE value**, and this indicates a slight **underestimation** on average. The SVM with a RBF kernel performs slightly better on the validation set across most metrics. However, the performance on the test set is still good, indicating that the model generalizes well to new, unseen data, despite the fact that there may be minor **overfitting** problems.
+
+
+## 8. Nonlinear SVM with a Sigmoid Kernel
+### Training & Evaluation
+```{r}
+svm_regression_model <- svm(Quality.of.Sleep ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate,
+                            data = train,
+                            type = "eps-regression",
+                            kernel = "sigmoid", 
+                            cost = 0.1)
+
+predicted_values_svm <- predict(svm_regression_model, newdata = valid)
+
+mse_svm <- mean((predicted_values_svm - valid$Quality.of.Sleep)^2)
+mae_svm <- mean(abs(predicted_values_svm - valid$Quality.of.Sleep))
+rsquared_svm <- 1 - (sum((valid$Quality.of.Sleep - predicted_values_svm)^2) / sum((valid$Quality.of.Sleep - mean(valid$Quality.of.Sleep))^2))
+mpe_svm <- mean(((valid$Quality.of.Sleep - predicted_values_svm) / valid$Quality.of.Sleep) * 100)
+rmse_svm <- sqrt(mean((predicted_values_svm - valid$Quality.of.Sleep)^2))
+mape_svm <- mean(abs((valid$Quality.of.Sleep - predicted_values_svm) / valid$Quality.of.Sleep) * 100)
+adjusted_rsquared_svm <- summary(lm(valid$Quality.of.Sleep ~ predicted_values_svm))$adj.r.squared
+
+cat("MSE for SVM with Sigmoid kernel:", mse_svm, "\n")
+cat("MAE for SVM with Sigmoid kernel:", mae_svm, "\n")
+cat("R-squared for SVM with Sigmoid kernel:", rsquared_svm, "\n")
+cat("MPE for SVM with Sigmoid kernel:", mpe_svm, "\n")
+cat("RMSE for SVM with Sigmoid kernel:", rmse_svm, "\n")
+cat("MAPE for SVM with Sigmoid kernel:", mape_svm, "\n")
+cat("Adjusted R-squared for SVM with Sigmoid kernel:", adjusted_rsquared_svm, "\n")
+```
+
+By observing the above regression evaluation metrics, we can see that this model has a  **reasonable performance**. The model performs well across most metrics, with **moderately low MSE, MAE, and RMSE**. Moreover, the R-squared value is decent, and this indicates a moderate fit to the data. Yet, the **negative MPE** suggests a tendency to **underestimate** the target variable on average.
+
+### Test Set Evaluation
+```{r}
+predicted_values_svm_test <- predict(svm_regression_model, newdata = test)
+
+mse_svm_test <- mean((predicted_values_svm_test - test$Quality.of.Sleep)^2)
+mae_svm_test <- mean(abs(predicted_values_svm_test - test$Quality.of.Sleep))
+rsquared_svm_test <- 1 - (sum((test$Quality.of.Sleep - predicted_values_svm_test)^2) / sum((test$Quality.of.Sleep - mean(test$Quality.of.Sleep))^2))
+mpe_svm_test <- mean(((test$Quality.of.Sleep - predicted_values_svm_test) / test$Quality.of.Sleep) * 100)
+rmse_svm_test <- sqrt(mean((predicted_values_svm_test - test$Quality.of.Sleep)^2))
+mape_svm_test <- mean(abs((test$Quality.of.Sleep - predicted_values_svm_test) / test$Quality.of.Sleep) * 100)
+adjusted_rsquared_svm_test <- summary(lm(test$Quality.of.Sleep ~ predicted_values_svm_test))$adj.r.squared
+
+cat("MSE for SVM with Sigmoid kernel test set:", mse_svm_test, "\n")
+cat("MAE for SVM with Sigmoid kernel test set:", mae_svm_test, "\n")
+cat("R-squared for SVM with Sigmoid kernel test set:", rsquared_svm_test, "\n")
+cat("MPE for SVM with Sigmoid kernel test set:", mpe_svm_test, "\n")
+cat("RMSE for SVM with Sigmoid kernel test set:", rmse_svm_test, "\n")
+cat("MAPE for SVM with Sigmoid kernel test set:", mape_svm_test, "\n")
+cat("Adjusted R-squared for SVM with Sigmoid kernel test set:", adjusted_rsquared_svm_test, "\n")
+```
+
+The above regression evaluation metrics on test set tell us that this model is **well-performance**. The metrics have **similar** values to that of validation set, and are better. There's still a **small negative MPE value**, and this indicates a slight **underestimation** on average. The SVM with a sigmoid kernel performs slightly better on the **test set** across most metrics. The model demonstrates consistent and acceptable predictive accuracy, and it generalizes well to new, unseen data.
+
+
+## 9. K-Nearest Neighbor
+### Training & Evaluation
+```{r}
+library(class)
+
+predictors <- c("Sleep.Duration", "Age", "Gender", "Stress.Level", "Sleep.Disorder", "Heart.Rate")
+response_var <- "Quality.of.Sleep"
+
+knn_model <- knn(train[, predictors], valid[, predictors], train[, response_var], k = 5)
+
+confusion_matrix_knn <- table(Actual = valid$Quality.of.Sleep, Predicted = knn_model)
+
+accuracy_knn <- sum(diag(confusion_matrix_knn)) / sum(confusion_matrix_knn)
+precision_knn <- diag(confusion_matrix_knn) / rowSums(confusion_matrix_knn)
+recall_knn <- diag(confusion_matrix_knn) / colSums(confusion_matrix_knn)
+f1_score_knn <- 2 * (precision_knn * recall_knn) / (precision_knn + recall_knn)
+overall_precision_knn <- mean(precision_knn, na.rm = TRUE)
+overall_recall_knn <- mean(recall_knn, na.rm = TRUE)
+overall_f1_score_knn <- mean(f1_score_knn, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_knn)$value
+
+intersection <- sum(diag(confusion_matrix_knn))
+union <- sum(confusion_matrix_knn) + sum(confusion_matrix_knn) - sum(diag(confusion_matrix_knn))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_knn)
+cat("Accuracy (KNN):", accuracy_knn, "\n")
+cat("Overall Precision (KNN):", overall_precision_knn, "\n")
+cat("Overall Recall (KNN):", overall_recall_knn, "\n")
+cat("Overall F1-Score (KNN):", overall_f1_score_knn, "\n")
+cat("Cohen's Kappa (KNN):", kappa, "\n")
+cat("Jaccard Index (KNN):", jaccard_index, "\n")
+```
+
+This is the model for KNN. Out of the 74 valid data points, we can see from the confusion matrix that there’re only **4** observations that have predictions in the incorrect class. Based on the metrics, the model shows relatively **high accuracy**. Furthermore, the value for **overall recall is high**, indicating that the model is effective at capturing actual positive instances. Beside, the **high F1-Score** suggests a good balance between precision and recall. The **Jaccard Index is high** , indicating a good overlap between predicted and actual positive instances. It is worth noting that the value for **Cohen’ kappa** is **slightly negative**, meaning the reliability of the model’s predictions needs to be taken into account, suggesting that the agreement is no better than random chance.
+
+
+### Test Set Evaluation
+```{r}
+test$Quality.of.Sleep <- as.factor(test$Quality.of.Sleep)
+
+knn_model_test <- knn(train[, predictors], test[, predictors], train[, response_var], k = 5)
+
+confusion_matrix_knn_test <- table(Actual = test$Quality.of.Sleep, Predicted = knn_model_test)
+
+accuracy_knn_test <- sum(diag(confusion_matrix_knn_test)) / sum(confusion_matrix_knn_test)
+precision_knn_test <- diag(confusion_matrix_knn_test) / rowSums(confusion_matrix_knn_test)
+recall_knn_test <- diag(confusion_matrix_knn_test) / colSums(confusion_matrix_knn_test)
+f1_score_knn_test <- 2 * (precision_knn_test * recall_knn_test) / (precision_knn_test + recall_knn_test)
+overall_precision_knn_test <- mean(precision_knn_test, na.rm = TRUE)
+overall_recall_knn_test <- mean(recall_knn_test, na.rm = TRUE)
+overall_f1_score_knn_test <- mean(f1_score_knn_test, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_knn_test)$value
+
+intersection <- sum(diag(confusion_matrix_knn_test))
+union <- sum(confusion_matrix_knn_test) + sum(confusion_matrix_knn_test) - sum(diag(confusion_matrix_knn_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_knn_test)
+cat("Accuracy (KNN):", accuracy_knn_test, "\n")
+cat("Overall Precision (KNN):", overall_precision_knn_test, "\n")
+cat("Overall Recall (KNN):", overall_recall_knn_test, "\n")
+cat("Overall F1-Score (KNN):", overall_f1_score_knn_test, "\n")
+cat("Cohen's Kappa:", kappa, "\n")
+cat("Jaccard Index:", jaccard_index, "\n")
+```
+
+Out of the 76 test data points, we can see from the confusion matrix that there're **8** observations that have predictions in the incorrect class, which is a little bit too many. By looking at the performance metrics, this model is **stll performing decently**, but the figures are **a bit lower** than the metrics for validation set. Additionally, the value of Cohen's Kappa is still **slightly negative**, so the **reliability** of the model's predictions needs to be taken into account. There may be some little **overfitting** issues.
+
+
+## 10. Random Forest
+### Training & Evaluation
+```{r}
+library(randomForest)
+
+predictors <- c("Sleep.Duration", "Age", "Gender", "Stress.Level", "Sleep.Disorder", "Heart.Rate")
+response_var <- "Quality.of.Sleep"
+
+rf_model <- randomForest(as.factor(Quality.of.Sleep) ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate, 
+                         data = train, 
+                         ntree = 100,
+                         importance = TRUE)
+
+predicted_classes_rf <- predict(rf_model, newdata = valid)
+
+confusion_matrix_rf <- table(Actual = valid$Quality.of.Sleep, Predicted = predicted_classes_rf)
+
+accuracy_rf <- sum(diag(confusion_matrix_rf)) / sum(confusion_matrix_rf)
+precision_rf <- diag(confusion_matrix_rf) / rowSums(confusion_matrix_rf)
+recall_rf <- diag(confusion_matrix_rf) / colSums(confusion_matrix_rf)
+f1_score_rf <- 2 * (precision_rf * recall_rf) / (precision_rf + recall_rf)
+overall_precision_rf <- mean(precision_rf, na.rm = TRUE)
+overall_recall_rf <- mean(recall_rf, na.rm = TRUE)
+overall_f1_score_rf <- mean(f1_score_rf, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_rf)$value
+
+intersection <- sum(diag(confusion_matrix_rf))
+union <- sum(confusion_matrix_rf) + sum(confusion_matrix_rf) - sum(diag(confusion_matrix_rf))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf)
+cat("Accuracy (Random Forest):", accuracy_rf, "\n")
+cat("Overall Precision (Random Forest):", overall_precision_rf, "\n")
+cat("Overall Recall (Random Forest):", overall_recall_rf, "\n")
+cat("Overall F1-Score (Random Forest):", overall_f1_score_rf, "\n")
+cat("Cohen's Kappa (Random Forest):", kappa, "\n")
+cat("Jaccard Index (Random Forest):", jaccard_index, "\n")
+
+print("Variable Importance:")
+print(importance(rf_model))
+```
+
+
+This random forest model shows **exceptional performance** on the validation set, with high accuracy, precision, recall, and F1-Score. The confusion matrix illustrates that there're only **2** observations predicted in the wrong class, which is pretty good. However, the **negative Cohen's Kappa** suggests that the observed agreement is **less** than expected by chance, which might be due to the imbalanced nature of the classes or other factors. The **high Jaccard Index** indicates **strong similarity** between predicted and actual classes.
+
+The table of variable importance is a metric that focuses on **training set**, and its interpretation is based on the patterns learned during training. It provides insights into which features or variables **contribute the most** to the predictive performance of the model. The **mean decrease accuracy** values show that **sleep duration** and **sleep disorder** have big impact on the accuracy of the model, and they are more influential in predicting the quality of sleep. On the other hand, **gender** and **sleep disorder** have less influence in the model's prediction accuracy. Looking at the importance scores, we can see that sleep duration is important for predicting instances belonging to class 1 and 6. For class 2, stress level and heart rate have higher importance. Besides, both sleep duration and sleep disorder contribute to predicting class 4 and 5. Furthermore, the **mean decrease Gini** values help prioritize the features based on their importance in the Random Forest model. It implies that **sleep duration**, **age**, and **stress level** stand out as particularly influential features.
+
+
+### Test Set Evaluation
+```{r}
+test$Quality.of.Sleep <- as.factor(test$Quality.of.Sleep)
+
+# Predict class labels for the test set
+predicted_classes_rf_test <- predict(rf_model, newdata = test)
+
+# Create confusion matrix for the test set
+confusion_matrix_rf_test <- table(Actual = test$Quality.of.Sleep, Predicted = predicted_classes_rf_test)
+
+# Calculate evaluation metrics for the test set
+accuracy_rf_test <- sum(diag(confusion_matrix_rf_test)) / sum(confusion_matrix_rf_test)
+precision_rf_test <- diag(confusion_matrix_rf_test) / rowSums(confusion_matrix_rf_test)
+recall_rf_test <- diag(confusion_matrix_rf_test) / colSums(confusion_matrix_rf_test)
+f1_score_rf_test <- 2 * (precision_rf_test * recall_rf_test) / (precision_rf_test + recall_rf_test)
+overall_precision_rf_test <- mean(precision_rf_test, na.rm = TRUE)
+overall_recall_rf_test <- mean(recall_rf_test, na.rm = TRUE)
+overall_f1_score_rf_test <- mean(f1_score_rf_test, na.rm = TRUE)
+kappa_rf_test <- kappam.fleiss(confusion_matrix_rf_test)$value
+intersection <- sum(diag(confusion_matrix_rf_test))
+union <- sum(confusion_matrix_rf_test) + sum(confusion_matrix_rf_test) - sum(diag(confusion_matrix_rf_test))
+jaccard_index <- intersection / union
+
+cat("Confusion Matrix (Random Forest - Test Set):\n")
+print(confusion_matrix_rf_test)
+
+cat("Accuracy (Random Forest - Test Set):", accuracy_rf_test, "\n")
+cat("Overall Precision (Random Forest - Test Set):", overall_precision_rf_test, "\n")
+cat("Overall Recall (Random Forest - Test Set):", overall_recall_rf_test, "\n")
+cat("Overall F1-Score (Random Forest - Test Set):", overall_f1_score_rf_test, "\n")
+cat("Cohen's Kappa (Random Forest - Test Set):", kappa_rf_test, "\n")
+cat("Jaccard Index (Random Forest - Test Set):", jaccard_index, "\n")
+```
+
+
+
+Based on the above metrics, the high precision and recall values indicate that the model is **effective** in correctly classifying instances for each class. The confusion metrics illustrates that there's only **3** observations predicted in the incorrect class. Even though the values of metrics are similar for both validation and test set, test set has slightly lower values, which may imply a problem of **overfitting.** The accuracy is quite high. Plus, the F1-Score indicates a balanced performance. The Jaccard Index has a high value, suggesting good model performance. Overall, the Random Forest model appears to **generalize well to new data**, as evidenced by its strong performance on both the validation and test sets. 
+
+
+## 11. Decision Tree
+### Training & Evaluation
+```{r}
+library(rpart)
+library(rpart.plot) 
+
+predictors <- c("Sleep.Duration", "Age", "Gender", "Stress.Level", "Sleep.Disorder", "Heart.Rate")
+response_var <- "Quality.of.Sleep"
+
+tree_model <- rpart(as.factor(Quality.of.Sleep) ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate, 
+                    data = train, 
+                    method = "class",
+                    control = rpart.control(cp = 0.01)) 
+
+predicted_classes_tree <- predict(tree_model, newdata = valid, type = "class")
+
+confusion_matrix_tree <- table(Actual = valid$Quality.of.Sleep, Predicted = predicted_classes_tree)
+
+accuracy_tree <- sum(diag(confusion_matrix_tree)) / sum(confusion_matrix_tree)
+precision_tree <- diag(confusion_matrix_tree) / rowSums(confusion_matrix_tree)
+recall_tree <- diag(confusion_matrix_tree) / colSums(confusion_matrix_tree)
+f1_score_tree <- 2 * (precision_tree * recall_tree) / (precision_tree + recall_tree)
+overall_precision_tree <- mean(precision_tree, na.rm = TRUE)
+overall_recall_tree <- mean(recall_tree, na.rm = TRUE)
+overall_f1_score_tree <- mean(f1_score_tree, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_tree)$value
+
+intersection <- sum(diag(confusion_matrix_tree))
+union <- sum(confusion_matrix_tree) + sum(confusion_matrix_tree) - sum(diag(confusion_matrix_tree))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_tree)
+cat("Accuracy (Decision Tree):", accuracy_tree, "\n")
+cat("Overall Precision (Decision Tree):", overall_precision_tree, "\n")
+cat("Overall Recall (Decision Tree):", overall_recall_tree, "\n")
+cat("Overall F1-Score (Decision Tree):", overall_f1_score_tree, "\n")
+cat("Cohen's Kappa (Decision Tree):", kappa, "\n")
+cat("Jaccard Index (Decision Tree):", jaccard_index, "\n")
+
+options(repr.plot.width = 10, repr.plot.height = 8) 
+prp(tree_model, extra = 1, type = 4, branch.lty = 2, varlen = 0, yesno = 2, fallen.leaves = TRUE)
+```
+
+The decision tree model appears to perform reasonably well, especially in terms of recall and F1-Score. It demonstrates **good accuracy**, correctly classifying instances approximately 92% of the time, with **6** observations predicted in the wrong class. The **negative Cohen's Kappa** suggests that the observed agreement is less than expected by chance. The Jaccard Index of 0.85 indicates a **good level of similarity** between the predicted and actual sets. 
+
+By looking at the decision tree, we can see that the data points are split according to **stress level** and **sleep duration**. This could imply that they play a crucial role in predicting the classes. 
+
+
+### Test Set Evaluation
+```{r}
+test$Quality.of.Sleep <- as.factor(test$Quality.of.Sleep)
+
+predicted_classes_tree_test <- predict(tree_model, newdata = test, type = "class")
+
+confusion_matrix_tree_test <- table(Actual = test$Quality.of.Sleep, Predicted = predicted_classes_tree_test)
+
+accuracy_tree_test <- sum(diag(confusion_matrix_tree_test)) / sum(confusion_matrix_tree_test)
+precision_tree_test <- diag(confusion_matrix_tree_test) / rowSums(confusion_matrix_tree_test)
+recall_tree_test <- diag(confusion_matrix_tree_test) / colSums(confusion_matrix_tree_test)
+f1_score_tree_test <- 2 * (precision_tree_test * recall_tree_test) / (precision_tree_test + recall_tree_test)
+overall_precision_tree_test <- mean(precision_tree_test, na.rm = TRUE)
+overall_recall_tree_test <- mean(recall_tree_test, na.rm = TRUE)
+overall_f1_score_tree_test <- mean(f1_score_tree_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_tree_test)$value
+
+intersection <- sum(diag(confusion_matrix_tree_test))
+union <- sum(confusion_matrix_tree_test) + sum(confusion_matrix_tree_test) - sum(diag(confusion_matrix_tree_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_tree_test)
+cat("Accuracy (Decision Tree - Test Set):", accuracy_tree_test, "\n")
+cat("Overall Precision (Decision Tree - Test Set):", overall_precision_tree_test, "\n")
+cat("Overall Recall (Decision Tree - Test Set):", overall_recall_tree_test, "\n")
+cat("Overall F1-Score (Decision Tree - Test Set):", overall_f1_score_tree_test, "\n")
+cat("Cohen's Kappa (Decision Tree - Test Set):", kappa_test, "\n")
+cat("Jaccard Index (Decision Tree - Test Set):", jaccard_index, "\n")
+```
+
+As for the test set metrics, the values are about the same as the validation set. Despite the fact that the figures are slightly lower, the performace is still **decent**. It's just that there may be some little issue of **overfitting**. The **negative Cohen's Kappa** values suggest that the agreement is not significantly better than chance, indicating potential areas for improvement in the model. Overall, the decision tree model appears to **generalize well to new data**, as evidenced by its consistent performance on both the validation and test sets. 
+
+
+## 12. LDA
+### Training & Evaluation
+```{r}
+library(ggplot2)
+library(MASS)
+library(gridExtra)
+
+lda_model <- lda(Quality.of.Sleep ~ Sleep.Duration + Age + Gender + Stress.Level + Sleep.Disorder + Heart.Rate, data = train)
+
+predicted_classes_lda <- predict(lda_model, newdata = valid)$class
+
+confusion_matrix_lda <- table(Actual = valid$Quality.of.Sleep, Predicted = predicted_classes_lda)
+
+accuracy_lda <- sum(diag(confusion_matrix_lda)) / sum(confusion_matrix_lda)
+precision_lda <- diag(confusion_matrix_lda) / rowSums(confusion_matrix_lda)
+recall_lda <- diag(confusion_matrix_lda) / colSums(confusion_matrix_lda)
+f1_score_lda <- 2 * (precision_lda * recall_lda) / (precision_lda + recall_lda)
+overall_precision_lda <- mean(precision_lda, na.rm = TRUE)
+overall_recall_lda <- mean(recall_lda, na.rm = TRUE)
+overall_f1_score_lda <- mean(f1_score_lda, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_lda)$value
+
+intersection <- sum(diag(confusion_matrix_lda))
+union <- sum(confusion_matrix_lda) + sum(confusion_matrix_lda) - sum(diag(confusion_matrix_lda))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_lda)
+cat("Accuracy (LDA):", accuracy_lda, "\n")
+cat("Overall Precision (LDA):", overall_precision_lda, "\n")
+cat("Overall Recall (LDA):", overall_recall_lda, "\n")
+cat("Overall F1-Score (LDA):", overall_f1_score_lda, "\n")
+cat("Cohen's Kappa (LDA):", kappa, "\n")
+cat("Jaccard Index (LDA):", jaccard_index, "\n")
+
+valid_with_predictions_lda <- cbind(valid, Predicted = predicted_classes_lda)
+
+plot1 <- ggplot(valid_with_predictions_lda, aes(x = Quality.of.Sleep, y = Sleep.Duration, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA Predictions (Sleep.Duration)", color = "Predicted Class")
+
+plot2 <- ggplot(valid_with_predictions_lda, aes(x = Quality.of.Sleep, y = Age, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA Predictions (Age)", color = "Predicted Class")
+
+plot3 <- ggplot(valid_with_predictions_lda, aes(x = Quality.of.Sleep, y = Gender, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA Predictions (Gender)", color = "Predicted Class")
+
+plot4 <- ggplot(valid_with_predictions_lda, aes(x = Quality.of.Sleep, y = Stress.Level, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA Predictions (Stress.Level)", color = "Predicted Class")
+
+plot5 <- ggplot(valid_with_predictions_lda, aes(x = Quality.of.Sleep, y = Sleep.Disorder, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA Predictions (Sleep.Disorder)", color = "Predicted Class")
+
+plot6 <- ggplot(valid_with_predictions_lda, aes(x = Quality.of.Sleep, y = Heart.Rate, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA Predictions (Heart.Rate)", color = "Predicted Class")
+
+grid.arrange(
+  arrangeGrob(plot1, plot2, ncol = 2), 
+  arrangeGrob(plot3, plot4, ncol = 2),
+  arrangeGrob(plot5, plot6, ncol = 2),
+  nrow = 3 
+)
+```
+
+This LDA model is **well-performed** on the validation set, with high accuracy, precision, recall, and F1-Score. The confusion matrix illustrates that there're **7** observations predicted in the wrong class, which is acceptable. However, the **slight negative Cohen's Kappa** suggests that the observed agreement is **less** than expected by chance, which might be due to the imbalanced nature of the classes or other factors. The **decent value of Jaccard Index** indicates **a good degree of similarity** between predicted and actual classes.
+
+Observing the scatter plots, higher quality of sleep can be observed with longer sleep duration, more aged, female, lower stress level, none sleep disorder or sleep apnea, and lower heart rate. Most of these results match with our common sense.
+
+### Test Set Evaluation
+```{r}
+predicted_classes_lda_test <- predict(lda_model, newdata = test)$class
+
+confusion_matrix_lda_test <- table(Actual = test$Quality.of.Sleep, Predicted = predicted_classes_lda_test)
+
+accuracy_lda_test <- sum(diag(confusion_matrix_lda_test)) / sum(confusion_matrix_lda_test)
+precision_lda_test <- diag(confusion_matrix_lda_test) / rowSums(confusion_matrix_lda_test)
+recall_lda_test <- diag(confusion_matrix_lda_test) / colSums(confusion_matrix_lda_test)
+f1_score_lda_test <- 2 * (precision_lda_test * recall_lda_test) / (precision_lda_test + recall_lda_test)
+overall_precision_lda_test <- mean(precision_lda_test, na.rm = TRUE)
+overall_recall_lda_test <- mean(recall_lda_test, na.rm = TRUE)
+overall_f1_score_lda_test <- mean(f1_score_lda_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_lda_test)$value
+
+intersection <- sum(diag(confusion_matrix_lda_test))
+union <- sum(confusion_matrix_lda_test) + sum(confusion_matrix_lda_test) - sum(diag(confusion_matrix_lda_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_lda_test)
+cat("Accuracy (LDA):", accuracy_lda_test, "\n")
+cat("Overall Precision (LDA):", overall_precision_lda_test, "\n")
+cat("Overall Recall (LDA):", overall_recall_lda_test, "\n")
+cat("Overall F1-Score (LDA):", overall_f1_score_lda_test, "\n")
+cat("Cohen's Kappa:", kappa_test, "\n")
+cat("Jaccard Index:", jaccard_index, "\n")
+
+test_with_predictions_lda <- cbind(test, Predicted = predicted_classes_lda_test)
+
+plot1 <- ggplot(test_with_predictions_lda, aes(x = Quality.of.Sleep, y = Sleep.Duration, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA (Sleep.Duration)", color = "Predicted Class")
+
+plot2 <- ggplot(test_with_predictions_lda, aes(x = Quality.of.Sleep, y = Age, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA (Age)", color = "Predicted Class")
+
+plot3 <- ggplot(test_with_predictions_lda, aes(x = Quality.of.Sleep, y = Gender, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA (Gender)", color = "Predicted Class")
+
+plot4 <- ggplot(test_with_predictions_lda, aes(x = Quality.of.Sleep, y = Stress.Level, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA (Stress.Level)", color = "Predicted Class")
+
+plot5 <- ggplot(test_with_predictions_lda, aes(x = Quality.of.Sleep, y = Sleep.Disorder, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA (Sleep.Disorder)", color = "Predicted Class")
+
+plot6 <- ggplot(test_with_predictions_lda, aes(x = Quality.of.Sleep, y = Heart.Rate, color = as.factor(Predicted))) +
+  geom_point() +
+  labs(title = "LDA (Heart.Rate)", color = "Predicted Class")
+
+grid.arrange(
+  arrangeGrob(plot1, plot2, ncol = 2), 
+  arrangeGrob(plot3, plot4, ncol = 2),
+  arrangeGrob(plot5, plot6, ncol = 2),
+  nrow = 3 
+)
+```
+
+Considering the test set, we can see from the confusion matrix that there're **5** observations that have predictions in the incorrect class, which is better than the validation set. By looking at the performance metrics, this model is **performing well**, and the figures are **slightly higher** than the metrics for validation set. Yet, the value of Cohen's Kappa is still **slightly negative**, so the **reliability** of the model's predictions needs to be taken into account. Overall, the model performs slightly better on the test set. This implies that the model can be deemed as good at indicating good generalization to unseen data.
+
+The scatter plots show the same trend as the validation set.
+
+# Conclusion
+
+Through this homework, I have the opportunity to play around with different classification models, and using all sorts of evaluation methods to test each performances and see which one suites my chosen dataset.  Comparing the results, most models perform better on validation sets than on test sets, except from SVM with large margin linear classifier, nonlinear SVM with a sigmoid kernel, and LDA. Excluding the nonlinear SVM models, it can be inferred that the multinomial logistic regression, SVM with soft margin linear classifier, and random forest models are performing exceptionally well, by evaluating their metrics. As for the nonlinear SVM, the model with sigmoid kernel performs the best, as it has the lowest error in predicting classes. Considering models that are not performing well, it would be the decision tree, as the metrics between validation and test set have significant differences.
+
+Furthermore, I realize that most models have negative cohen kappa values. This indicates the observed agreement is worse than what would be expected by chance. On top of that, even though I have split the data into 70% training set, 15% validation set, and 15% test set, there seems to be some overfitting issues across all classification models. In general, most models perform better on validation set than on test set. For models that don't have significant differences between valid and test set, this outcome can be viewed as something normal, since the test set generally has slightly higher error metrics compared to the validation set, which is expected as models often perform slightly worse on unseen data. If I want to solve the problem of negative cohen kappa values and overfitting, perhaps next time I could perform regularization, cross-validation, feature selection, or use simpler models. 
+
+
+# Possible Problems To Investigate For Future Studies
+
+1. If I adjust the proportion of the training, validation, and test sets, would the results be different ?
+
+2. If I reduce the number of features, would the results be different ?
+
+3. If I perform regularization, cross-validation, feature selection, or use simpler models, would the overfitting problem be solved?
+
+4. Is there any other variable that could significantly impact the quality of sleep ?
+
+5. How to effectively tune the parameters of the models ?

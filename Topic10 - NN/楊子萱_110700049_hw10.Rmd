@@ -1,0 +1,606 @@
+---
+title: "楊子萱＿110700049_hw10"
+author: "楊子萱"
+date: "2023-12-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+In order to perform the neural networks, I will be using the dataset of "Sleep_health_and_lifestyle_dataset". The neural network includes the feed-forward process and back-propagation. The feedforward process involves passing input through the network, applying weights and activation functions at each layer, and generating an output. As for the backpropagation, it's an optimization algorithm that adjusts the weights of a neural network to minimize the difference between predicted and actual outputs, improving the network's ability to make accurate predictions. For the neural networks, I will set up 5 different kinds of networks. Besides, to evaluate the trained network, I will use the prediction and evaluation metrics. Also, I have come up with 4 different methods that are slightly different in terms of the percentage training and test sets, as well as the structure of data. I will investigate their performance and compare the results. Below is the content of my assignment.
+
+# Contents
+
+  1. Importing Libraries
+  
+  2. Read Data
+  
+  3. Check Type & Structure of Data
+  
+  4. Neural Network Implementation
+  
+    a. Method 1 : 80% Training Set & 20% Test Set
+    
+    b. Method 2 : 85% Training Set & 15% Test Set
+    
+    c. Method 3 : 80% Training Set & 20% Test Set + Data Preprocessing
+    
+    d. Method 4 : 85% Training Set & 15% Test Set + Data Preprocessing
+    
+
+# The 5 Different Settings for Neural Network
+
+  1. 1 hidden layer with 16 nodes
+  
+  2. 1 hidden layer with 64 nodes
+  
+  3. 2 hidden layers with 8x8=64 and 4x4=16 nodes, respectively
+  
+  4. 3 hidden layers with 8x8=64, 8x8=64 and 4x4=16 nodes, respectively
+  
+  5. 4 hidden layers with 8x8=64, 8x8=64, 4x4=16 and 4x4=16 nodes, respectively
+
+# 1. Importing Libraries
+```{r}
+library(ggplot2)
+library(caret)
+library(dplyr)
+library(nnet)
+library(Metrics)
+library(tidyr)
+library(neuralnet)
+library(keras)
+library(tensorflow)
+```
+
+# 2. Read Data
+```{r}
+data = read.csv(file = 'Sleep_health_and_lifestyle_dataset.csv', header = TRUE, sep = ',')
+```
+
+# 3. Check Type & Structure of Data 
+```{r}
+class(data)
+str(data)
+```
+
+# 4. Neural Network Implementation
+## a. Method 1 : 80% Training Set & 20% Test Set
+### i. Data Splitting
+```{r}
+set.seed(123)
+
+total_rows <- nrow(data)
+indices <- sample(1:total_rows, total_rows)
+
+train_fraction <- 0.8
+test_fraction <- 0.2
+
+train_size <- floor(train_fraction * total_rows)
+test_size <- total_rows - train_size
+
+train <- data[indices[1:train_size], ]
+test <- data[indices[(train_size + 1):total_rows], ]
+
+n_train <- nrow(train)
+n_test <- nrow(test)
+
+cat("Number of data points in the training set:", n_train, "\n")
+cat("Number of data points in the test set:", n_test, "\n")
+```
+
+### ii. Scaling
+```{r}
+integer_cols_train <- sapply(train, is.integer)
+integer_cols_test <- sapply(test, is.integer)
+
+integer_train <- train[, integer_cols_train]
+integer_test <- test[, integer_cols_test]
+
+scaled_train <- as.data.frame(scale(integer_train))
+scaled_test <- as.data.frame(scale(integer_test))
+
+zip.train <- cbind(train[, -integer_cols_train], scaled_train)
+zip.test <- cbind(test[, -integer_cols_test], scaled_test)
+
+numeric_cols <- sapply(zip.train, is.numeric)
+zip.train_numeric <- zip.train[, numeric_cols]
+numeric_cols <- sapply(zip.test, is.numeric)
+zip.test_numeric <- zip.test[, numeric_cols]
+
+a <- class.ind(zip.train[, 1])
+colnames(a) <- paste("a", colnames(a), sep="")
+
+yname <- colnames(a)
+xname <- colnames(zip.train_numeric)[-1]
+(fmla <- as.formula(paste(paste(yname, collapse="+"), " ~ ", paste(xname, collapse="+"))))
+```
+
+### iii. Training
+```{r}
+# Net-1: One hidden layer with 16 nodes
+fitnn1 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn1, rep="best")
+
+# Net-2: One hidden layer with 64 nodes
+fitnn5 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn5, rep="best")
+
+# Net-3: Two hidden layers with 
+# 8x8=64 and 4x4=16 nodes, respectively
+fitnn2 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn2, rep="best")
+
+# Net-4: Three hidden layers with 
+# 8x8=64, 8x8=64 and 4x4=16 nodes, respectively
+fitnn3 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 64, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn3, rep="best")
+
+# Net-5: Four hidden layers with 
+# 8x8=64, 8x8=64, 4x4=16 and 4x4=16 nodes, respectively
+fitnn4 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 64, 16, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn4, rep="best")
+```
+
+### iv. Prediction and Evaluation
+```{r}
+prediction <- function(fitnn)
+{
+ btest <- zip.test[,-1]
+ prednn <- compute(fitnn, btest)
+ resind <- apply(prednn$net.result, 1, which.max)
+ pred <- (0:9)[resind]
+ confusion <- table(pred, zip.test[,1])
+ cat("Evaluation for", deparse(substitute(fitnn)), "\n")
+ cat("Confusion table")
+ print(confusion)
+ accuracy <- sum(diag(confusion))/length(pred)
+ cat("Accuracy = ", accuracy, "\n")
+ precision <- diag(confusion) / rowSums(confusion)
+ cat("Precision =", precision, "\n")
+ recall <- sum(diag(confusion)) / sum(confusion)
+ cat("Recall =", recall, "\n")
+ f1_score <- 2 * (precision * recall) / (precision + recall)
+ cat("F1-Score =", f1_score, "\n")
+}
+
+# Evaluate predictions for each trained network
+prediction(fitnn1)
+prediction(fitnn2)
+prediction(fitnn3)
+prediction(fitnn4)
+prediction(fitnn5)
+```
+
+
+## b. Method 2 : 85% Training Set & 15% Test Set
+### i. Data Splitting
+```{r}
+set.seed(123)
+
+total_rows <- nrow(data)
+indices <- sample(1:total_rows, total_rows)
+
+train_fraction <- 0.85
+test_fraction <- 0.15
+
+train_size <- floor(train_fraction * total_rows)
+test_size <- total_rows - train_size
+
+train <- data[indices[1:train_size], ]
+test <- data[indices[(train_size + 1):total_rows], ]
+
+n_train <- nrow(train)
+n_test <- nrow(test)
+
+cat("Number of data points in the training set:", n_train, "\n")
+cat("Number of data points in the test set:", n_test, "\n")
+```
+
+### ii. Scaling
+```{r}
+integer_cols_train <- sapply(train, is.integer)
+integer_cols_test <- sapply(test, is.integer)
+
+integer_train <- train[, integer_cols_train]
+integer_test <- test[, integer_cols_test]
+
+scaled_train <- as.data.frame(scale(integer_train))
+scaled_test <- as.data.frame(scale(integer_test))
+
+zip.train <- cbind(train[, -integer_cols_train], scaled_train)
+zip.test <- cbind(test[, -integer_cols_test], scaled_test)
+
+numeric_cols <- sapply(zip.train, is.numeric)
+zip.train_numeric <- zip.train[, numeric_cols]
+numeric_cols <- sapply(zip.test, is.numeric)
+zip.test_numeric <- zip.test[, numeric_cols]
+
+a <- class.ind(zip.train[, 1])
+colnames(a) <- paste("a", colnames(a), sep="")
+
+yname <- colnames(a)
+xname <- colnames(zip.train_numeric)[-1]
+(fmla <- as.formula(paste(paste(yname, collapse="+"), " ~ ", paste(xname, collapse="+"))))
+```
+
+### iii. Training
+```{r}
+# Net-1: One hidden layer with 16 nodes
+fitnn1 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn1, rep="best")
+
+# Net-2: One hidden layer with 64 nodes
+fitnn5 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn5, rep="best")
+
+# Net-3: Two hidden layers with 
+# 8x8=64 and 4x4=16 nodes, respectively
+fitnn2 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn2, rep="best")
+
+# Net-4: Three hidden layers with 
+# 8x8=64, 8x8=64 and 4x4=16 nodes, respectively
+fitnn3 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 64, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn3, rep="best")
+
+# Net-5: Four hidden layers with 
+# 8x8=64, 8x8=64, 4x4=16 and 4x4=16 nodes, respectively
+fitnn4 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 64, 16, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn4, rep="best")
+```
+
+### iv. Prediction and Evaluation
+```{r}
+prediction <- function(fitnn)
+{ 
+ btest <- zip.test[,-1]
+ prednn <- compute(fitnn, btest)
+ resind <- apply(prednn$net.result, 1, which.max)
+ pred <- (0:9)[resind]
+ confusion <- table(pred, zip.test[,1])
+ cat("Evaluation for", deparse(substitute(fitnn)), "\n")
+ cat("Confusion table")
+ print(confusion)
+ accuracy <- sum(diag(confusion))/length(pred)
+ cat("Accuracy = ", accuracy, "\n")
+ precision <- diag(confusion) / rowSums(confusion)
+ cat("Precision =", precision, "\n")
+ recall <- sum(diag(confusion)) / sum(confusion)
+ cat("Recall =", recall, "\n")
+ f1_score <- 2 * (precision * recall) / (precision + recall)
+ cat("F1-Score =", f1_score, "\n")
+}
+
+# Evaluate predictions for each trained network
+prediction(fitnn1)
+prediction(fitnn2)
+prediction(fitnn3)
+prediction(fitnn4)
+prediction(fitnn5)
+```
+
+
+
+
+
+
+
+
+
+## c. Method 3 : 80% Training Set & 20% Test Set + Data Preprocessing
+### i. Data Preprocessing
+```{r}
+split_values <- strsplit(as.character(data$Blood.Pressure), "/")
+
+data$Systolic.Blood.Pressure <- sapply(split_values, function(x) as.integer(x[1]))
+data$Diastolic.Blood.Pressure <- sapply(split_values, function(x) as.integer(x[2]))
+```
+
+Since the "Blood.Pressure" variable consists of string values, I used tokenization technique to pick out the integers representing systolic blood pressure and diastolic blood pressure, 
+
+### ii.  Data Splitting
+```{r}
+set.seed(123)
+
+total_rows <- nrow(data)
+indices <- sample(1:total_rows, total_rows)
+
+train_fraction <- 0.80
+test_fraction <- 0.20
+
+train_size <- floor(train_fraction * total_rows)
+test_size <- total_rows - train_size
+
+train <- data[indices[1:train_size], ]
+test <- data[indices[(train_size + 1):total_rows], ]
+
+n_train <- nrow(train)
+n_test <- nrow(test)
+
+cat("Number of data points in the training set:", n_train, "\n")
+cat("Number of data points in the test set:", n_test, "\n")
+```
+
+### iii. Scaling
+```{r}
+integer_cols_train <- sapply(train, is.integer)
+integer_cols_test <- sapply(test, is.integer)
+
+integer_train <- train[, integer_cols_train]
+integer_test <- test[, integer_cols_test]
+
+scaled_train <- as.data.frame(scale(integer_train))
+scaled_test <- as.data.frame(scale(integer_test))
+
+zip.train <- cbind(train[, -integer_cols_train], scaled_train)
+zip.test <- cbind(test[, -integer_cols_test], scaled_test)
+
+numeric_cols <- sapply(zip.train, is.numeric)
+zip.train_numeric <- zip.train[, numeric_cols]
+numeric_cols <- sapply(zip.test, is.numeric)
+zip.test_numeric <- zip.test[, numeric_cols]
+
+a <- class.ind(zip.train[, 1])
+colnames(a) <- paste("a", colnames(a), sep="")
+
+yname <- colnames(a)
+xname <- colnames(zip.train_numeric)[-1]
+(fmla <- as.formula(paste(paste(yname, collapse="+"), " ~ ", paste(xname, collapse="+"))))
+```
+
+### iv. Training
+```{r}
+# Net-1: One hidden layer with 16 nodes
+fitnn1 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn1, rep="best")
+
+# Net-2: One hidden layer with 64 nodes
+fitnn5 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn5, rep="best")
+
+# Net-3: Two hidden layers with 
+# 8x8=64 and 4x4=16 nodes, respectively
+fitnn2 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn2, rep="best")
+
+# Net-4: Three hidden layers with 
+# 8x8=64, 8x8=64 and 4x4=16 nodes, respectively
+fitnn3 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 64, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn3, rep="best")
+
+# Net-5: Four hidden layers with 
+# 8x8=64, 8x8=64, 4x4=16 and 4x4=16 nodes, respectively
+fitnn4 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 64, 16, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn4, rep="best")
+```
+
+### v. Prediction and Evaluation
+```{r}
+prediction <- function(fitnn)
+{ 
+ btest <- zip.test[,-1]
+ prednn <- compute(fitnn, btest)
+ resind <- apply(prednn$net.result, 1, which.max)
+ pred <- (0:9)[resind]
+ confusion <- table(pred, zip.test[,1])
+ cat("Evaluation for", deparse(substitute(fitnn)), "\n")
+ cat("Confusion table")
+ print(confusion)
+ accuracy <- sum(diag(confusion))/length(pred)
+ cat("Accuracy = ", accuracy, "\n")
+ precision <- diag(confusion) / rowSums(confusion)
+ cat("Precision =", precision, "\n")
+ recall <- sum(diag(confusion)) / sum(confusion)
+ cat("Recall =", recall, "\n")
+ f1_score <- 2 * (precision * recall) / (precision + recall)
+ cat("F1-Score =", f1_score, "\n")
+}
+
+# Evaluate predictions for each trained network
+prediction(fitnn1)
+prediction(fitnn2)
+prediction(fitnn3)
+prediction(fitnn4)
+prediction(fitnn5)
+```
+
+
+## d. Method 4 : 85% Training Set & 15% Test Set + Data Preprocessing
+### i.  Data Splitting
+```{r}
+set.seed(123)
+
+total_rows <- nrow(data)
+indices <- sample(1:total_rows, total_rows)
+
+train_fraction <- 0.85
+test_fraction <- 0.15
+
+train_size <- floor(train_fraction * total_rows)
+test_size <- total_rows - train_size
+
+train <- data[indices[1:train_size], ]
+test <- data[indices[(train_size + 1):total_rows], ]
+
+n_train <- nrow(train)
+n_test <- nrow(test)
+
+cat("Number of data points in the training set:", n_train, "\n")
+cat("Number of data points in the test set:", n_test, "\n")
+```
+
+### ii. Scaling
+```{r}
+integer_cols_train <- sapply(train, is.integer)
+integer_cols_test <- sapply(test, is.integer)
+
+integer_train <- train[, integer_cols_train]
+integer_test <- test[, integer_cols_test]
+
+scaled_train <- as.data.frame(scale(integer_train))
+scaled_test <- as.data.frame(scale(integer_test))
+
+zip.train <- cbind(train[, -integer_cols_train], scaled_train)
+zip.test <- cbind(test[, -integer_cols_test], scaled_test)
+
+numeric_cols <- sapply(zip.train, is.numeric)
+zip.train_numeric <- zip.train[, numeric_cols]
+numeric_cols <- sapply(zip.test, is.numeric)
+zip.test_numeric <- zip.test[, numeric_cols]
+
+a <- class.ind(zip.train[, 1])
+colnames(a) <- paste("a", colnames(a), sep="")
+
+yname <- colnames(a)
+xname <- colnames(zip.train_numeric)[-1]
+(fmla <- as.formula(paste(paste(yname, collapse="+"), " ~ ", paste(xname, collapse="+"))))
+```
+
+### iii. Training
+```{r}
+# Net-1: One hidden layer with 16 nodes
+fitnn1 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn1, rep="best")
+
+# Net-2: One hidden layer with 64 nodes
+fitnn5 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn5, rep="best")
+
+# Net-3: Two hidden layers with 
+# 8x8=64 and 4x4=16 nodes, respectively
+fitnn2 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn2, rep="best")
+
+# Net-4: Three hidden layers with 
+# 8x8=64, 8x8=64 and 4x4=16 nodes, respectively
+fitnn3 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 64, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn3, rep="best")
+
+# Net-5: Four hidden layers with 
+# 8x8=64, 8x8=64, 4x4=16 and 4x4=16 nodes, respectively
+fitnn4 <- neuralnet(fmla, data = cbind(a, zip.train_numeric[, -1]), 
+                    hidden = c(64, 64, 16, 16),
+                    err.fct = "ce", act.fct = "logistic",
+                    linear.output = FALSE)
+
+plot(fitnn4, rep="best")
+```
+
+### iv. Prediction and Evaluation
+```{r}
+prediction <- function(fitnn)
+{ 
+ btest <- zip.test[,-1]
+ prednn <- compute(fitnn, btest)
+ resind <- apply(prednn$net.result, 1, which.max)
+ pred <- (0:9)[resind]
+ confusion <- table(pred, zip.test[,1])
+ cat("Evaluation for", deparse(substitute(fitnn)), "\n")
+ cat("Confusion table")
+ print(confusion)
+ accuracy <- sum(diag(confusion))/sum(confusion)
+ cat("Accuracy = ", accuracy, "\n")
+ precision <- diag(confusion) / rowSums(confusion)
+ cat("Precision =", precision, "\n")
+ recall <- sum(diag(confusion)) / sum(confusion)
+ cat("Recall =", recall, "\n")
+ f1_score <- 2 * (precision * recall) / (precision + recall)
+ cat("F1-Score =", f1_score, "\n")
+}
+
+# Evaluate predictions for each trained network
+prediction(fitnn1)
+prediction(fitnn2)
+prediction(fitnn3)
+prediction(fitnn4)
+prediction(fitnn5)
+```
+
+
+# Conclusion
+
+Through this assignment, I was able to have a play around with the different data settings for the neural network, as well as comparing the results between different number of nodes and layers. 
+
+For the first method, the evaluation results show that the networks have the same performance, as they have the same evaluation metrics. The second method, which uses 85% of training set and 15% of test set, shows similar trends in the results as the first. All of the networks have similar performance, but the second method is performing better than the first method. After conducting some data preprocessing, the results are mostly the same, except from the network 5, which has 4 hidden layers with 8x8=64, 8x8=64, 4x4=16 and 4x4=16 nodes respectively. The 5th network shows higher accuracy and better values for other metrics. Comparing all of the methods, we can conclude that the last method, which uses 85% of training set and 15% of test set and also conducts data preprocessing, has the best performance.
+
+

@@ -1,0 +1,613 @@
+---
+title: "楊子萱_110700049_hw05"
+author: "楊子萱"
+date: "2023-10-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+data = read.csv(file = 'Sleep_Efficiency.csv', header = TRUE, sep = ',')
+```
+
+# *Introduction*
+
+In order to conduct **Exploratory Data Analysis (EDA)**, I choose to use the dataset about **sleep efficiency**, which has some **missing data**. I will be explaining **why** I choose to use certain EDA methods and **what** results I find. Moreover, I will detect whether there exists some **outliers** in the dataset. If there are some outliers, I will explain **how** I will deal with them. Last but not least, I will discuss some possible questions to be investigated for future studies.
+
+
+# *Key Components of EDA*
+
+1. Handling Missing Data
+
+2. Outlier Detection
+
+3. Data Summarization
+
+4. Data Visualization
+
+5. Correlation Analysis
+
+
+# *1. Handling Missing Data*
+## Finding Unique Characters
+```{r}
+cat("Number of rows with missing values:", sum(!complete.cases(data)), "\n")
+
+missing_counts <- colSums(is.na(data))
+columns_with_missing <- sum(missing_counts > 0)
+cat("Number of columns with missing values:", columns_with_missing, "\n")
+
+if (columns_with_missing > 0) {
+  cat("Columns with missing values:", paste(names(missing_counts[missing_counts > 0]), collapse = ", "), "\n")
+}
+```
+
+## Mean Imputation 
+```{r}
+for (col in colnames(data)) {
+  if (any(is.na(data[, col]))) {
+    mean_value <- mean(data[, col], na.rm = TRUE)
+    mean_value <- round(mean_value)
+    cat("The mean for ", col, ": ", mean_value, "\n")
+    data[is.na(data[, col]), col] <- mean_value
+  }
+}
+
+cat("Number of rows with missing values:", sum(!complete.cases(data)), "\n")
+
+missing_counts <- colSums(is.na(data))
+columns_with_missing <- sum(missing_counts > 0)
+cat("Number of columns with missing values:", columns_with_missing, "\n")
+```
+
+Since there are a total number of **64** rows and **4** columns with missing values, I decide to use mean imputation to fill in those missing values. If I choose to delete those rows, I think there will be **too many rows** to be deleted, and this might affect the analysis's accuracy. Moreover, due to the fact that the **true values are unknown**, we cannot conduct MAE or R-Squared tests to see the accuracy of mean imputation. However, **the number of possible values of those columns are small, and the ranges are also small**. Thus, I believe using mean would give highly accurate imputations.
+
+# 2.Outlier Detection
+## a. Box Plot
+```{r}
+par(mfrow = c(1, 3))
+
+box_dur <- boxplot(data$Sleep.duration,
+        main = "Box Plot For Sleep Duration",
+        xlab = "Sleep Duration",
+        ylab = "Values",
+        col = "#45DBD6",
+        border = "black")
+
+box_ds <- boxplot(data$Deep.sleep.percentage,
+        main = "Box Plot For Deep Sleep Percentage",
+        xlab = "Deep Sleep Percentage",
+        ylab = "Percentage",
+        col = "#1246A1",
+        border = "black")
+
+box_caf <- boxplot(data$Caffeine.consumption,
+        main = "Box Plot For Caffeine Consumption",
+        xlab = "Caffeine Consumption",
+        ylab = "Values (mg)",
+        col = "#7D5F32",
+        border = "black")
+
+par(mfrow = c(1, 1))
+```
+
+The above box plots are the variables that have outliers. The reason I choose to use a box plot is because I wanted to find out if the dataset contains any **outliers**, and I think this is the most **straight-forward** method.  Also, the box plot gives me information about the **central tendency**, **interquartile range**, and the **shape and skewness** of distribution. For sleep duration, the box plot illustrates that there are **2 outlier values**, the variety of sleep duration hours is **small**, and the distribution is **slightly skewed to the left**. As for deep sleep percentage, it is demonstrated that there is **1 outlier values**, the variety of percentages is **slightly large**, and the distribution is **skewed to the left**. Lastly, the box plot for caffeine consumption portrays that there is **1 outlier values**, the variety of percentages is small, and the distribution is skewed to the right.
+
+## b. Z-Score
+### Sleep Duration
+```{r}
+mean <- mean(data$Sleep.duration)
+sd_data <- sd(data$Sleep.duration)
+
+z_scores <- (data$Sleep.duration - mean) / sd_data
+
+threshold <- 2
+
+outlier_indices <- which(abs(z_scores) > threshold)
+
+outliers <- data$Sleep.duration[outlier_indices]
+print(outliers)
+```
+
+### Deep Sleep Percentage
+```{r}
+mean <- mean(data$Deep.sleep.percentage)
+sd_data <- sd(data$Deep.sleep.percentage)
+
+z_scores <- (data$Deep.sleep.percentage - mean) / sd_data
+
+threshold <- 2
+
+outlier_indices <- which(abs(z_scores) > threshold)
+
+outliers <- data$Deep.sleep.percentage[outlier_indices]
+print(outliers)
+```
+
+### Caffeine Consumption
+```{r}
+ mean <- mean(data$Caffeine.consumption, na.rm = TRUE)
+sd_data <- sd(data$Caffeine.consumption, na.rm = TRUE)
+
+z_scores <- (data$Caffeine.consumption - mean) / sd_data
+
+threshold <- 3
+
+outlier_indices <- which(abs(z_scores) > threshold)
+
+outliers <- data$Caffeine.consumption[outlier_indices]
+print(outliers)
+```
+
+Apart from box plot, I also conduct a z-test to **reinforce** the outliers illustrated in the box plots. We can see that the values for the outliers are **same** as that detected by box plots. Furthermore, we are able to see how the **number of outliers** from the z-test.
+
+## Deletion of Outlier
+
+I decided to delete the outliers detected by box plot. The reason why I delete those outliers is because those values are **true values**, unlike the missing values, so I think it will somehow affect the **accuracy** of the dataset and the **analysis**, if I use other methods to change the values.
+
+```{r}
+outliers <- boxplot(data$Sleep.duration, plot=FALSE)$out
+data <- data[!data$Sleep.duration %in% outliers, ]
+outliers <- boxplot(data$Deep.sleep.percentage, plot=FALSE)$out
+data <- data[!data$Deep.sleep.percentage %in% outliers, ]
+outliers <- boxplot(data$Caffeine.consumption, plot=FALSE)$out
+data <- data[!data$Caffeine.consumption %in% outliers, ]
+```
+
+After deleting the outliers, the number of rows dropped from **452 to 431**.
+
+# *3.Data Summarization* 
+## Check Type & Structure of Data 
+```{r}
+class(data)
+dim(data)
+str(data)
+```
+
+The above functions allow us to see that this dataset is a **dataframe**. After data cleaning, the number of rows decreased to **431**, and the number of variables is **15**. The structure function demonstrates each variable's **value format** (whether it's an integer, character, or number), and also the **first few rows' values**.
+
+## Summary & Plot
+```{r}
+summary(data)
+```
+
+I decide to use the summary function is because it provides us with a **quick overview** of the variables, including the **minimum and maximum values**, the mean, the mode, and the **quartiles**. For variables in the type of **characters**, the function shows the number of rows (**length**), the **class**, and the **mode**.
+
+```{r}
+plot(data)
+```
+
+The reason why I include the plot function is because it's a **fundamental tool** in EDA, and it allows us to see the **relationships** between variables. It creates a matrix of **scatter plots**. Each pair of variables will be plotted against each other. Since there're too many data points and the space is small, sometimes it might be difficult to spot the relationships.
+
+```{r}
+library(psych)
+describe(data)
+```
+
+The describe function provides us with **descriptive statistical information** about the variables. The information include the **mean**, the **standard deviation** (sd), the **median**, the **trimmed mean** (trimmed), the **mean absolute deviation** (mad), the **minimum** and **maximum** values, the **range**, the **skewness** (skew), the **kurtosis**, and the **standard error** (se).
+
+
+## Summary of Correlation
+```{r}
+num_col <- sapply(data, function(x) is.numeric(x))
+num <- data[, num_col]
+
+correlation_matrix <- cor(num, use = "complete.obs")
+
+print(correlation_matrix)
+```
+
+Since the dataset is composed of both character and numerical variables, I pick out the **numerical variables** only, so that I am able to implement the correlation matrix. The correlation matrix allows us to see the **correlation coefficient** for each pair of variables. This is a **simple and easy** method to get an idea of the correlations.
+
+
+```{r}
+library(corrplot)
+
+corrplot(correlation_matrix,
+         method = "color",  
+         type = "upper", 
+         tl.cex = 0.7,   
+         tl.col = "black" 
+)
+```
+
+The corrplot function allows us to **visualize** the correlation coefficient in **colors** and they're arranged in a **more organized** matrix. The **lighter** the colors are, the **closer to 0** the correlation coefficients are. The **darker** the colors are, the **more correlated** the pair of variables are.
+
+```{r}
+pairs.panels(num, 
+             method = "pearson", 
+             hist.col = "lightblue",
+             density = TRUE,
+             ellipses = TRUE, 
+             main = "Correlation Plot with Histograms and Scatter Plots",
+             gap = 0
+)
+```
+
+The pairs.panels function illustrates the **comprehensive matrix** plot about the **numerical variables' correlation**. The information we can infer from it include the **correlation coefficient**, the **histograms**, the **density plots**, and the **scatter plots**. This function is useful for identify **patterns**.
+
+## Correlation Heatmap
+```{r}
+library(ggplot2)
+library(reshape2)
+
+correlation_matrix <- cor(num)
+correlation_data <- melt(correlation_matrix)
+
+ggplot(correlation_data, aes(Var1, Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "darkred") +
+  theme_minimal() +
+  labs(title = "Correlation Heatmap")
+```
+
+The correlation heatmap is another **visualization** method of getting a quick idea of how each pair of variables are correlated. The difference between this and the above corrplot function is that the heatmap is a **square matrix**, which means that it will have the same squares opposite sides of the diagonal line. Also, the color **range** for heatmap is **smaller**, so it is **not as clear and straigh-forward** to spot the color differences. 
+
+## Gini Coefficient
+```{r}
+library(ineq)
+
+for (col_name in colnames(data)) {
+  if (is.numeric(data[[col_name]])) {
+    gini_value <- ineq::Gini(data[[col_name]])
+    cat("Gini coefficient for", col_name, "is:", gini_value, "\n")
+  }
+}
+```
+
+Using a for loop, I print out the Gini coefficients for all numeric variables. The Gini coefficient measures the **inequality** in a dataset. It tells us **how unequal the distribution of values** within a variable is. If the value is **0**, that means **all values are the name**, there is an **equal** distribution. Yet, if the Gini coefficient is **1**, this represents that there is a **perfect inequality**, meaning that there is one value **dominating** the others.
+
+# *4.Data Visualization* 
+## Pie Chart
+```{r}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+
+gen_counts <- data %>% 
+  group_by(Gender) %>% 
+  summarize(count = n())
+
+gen_counts <- gen_counts %>%
+  mutate(percentage = count / sum(count) * 100)
+
+pie_chart <- ggplot(gen_counts, aes(x = "", y = count, fill = Gender)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Gender Distribution") +
+  scale_fill_brewer(palette = "Set1") +  
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 4)
+
+s_counts <- data %>% 
+  group_by(Smoking.status ) %>% 
+  summarize(count = n())
+
+s_counts <- s_counts %>%
+  mutate(percentage = count / sum(count) * 100)
+
+pie_charts <- ggplot(s_counts, aes(x = "", y = count, fill = Smoking.status)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Smoking Status Distribution") +
+  scale_fill_brewer(palette = "Set3") +  
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 4)
+
+grid.arrange(pie_chart, pie_charts, ncol = 2)
+```
+
+I used a pie chart because the values of gender are either **"Male", or "Female"** and the values of smoking status are **either "Yes", or "No**. Plus, they're all in the type of **characters**. Thus, it would be **easier** to know the gender and smoking status distribution by just looking at the pie chart at first glance. The results show that the gender distribution is **almost evenly distributed**, half male and half female. As for smoking status, there're **more than half** of the people who are **non-smokers**.
+
+
+## 3D Scatter Plot 
+### a. Sleep Efficiency v.s. Deep Sleep Percentage v.s. Light Sleep Percentage
+```{r}
+library(scatterplot3d)
+
+scatterplot3d(
+  x = data$Sleep.efficiency,
+  y = data$Deep.sleep.percentage,
+  z = data$Light.sleep.percentage,
+  color = "#266d96",   
+  pch = 19,            
+  main = "3D Scatter Plot",
+  xlab = "Sleep.efficiency",
+  ylab = "Deep.sleep.percentage",
+  zlab = "Light.sleep.percentage"
+)
+```
+
+3D scatter plots allow us to **visualize** the relationship between **3** variables. From the above plot and from that angle, we can see that the data are split into **2** groups, one with a **higher** percentage of light sleep and one with a **lower** percentage of sleep. Both groups show that the correlation for sleep efficiency and light sleep percentage is **negatively** related. Yet, sleep efficiency and deep sleep percentage have a **positive** correlation. As for deep sleep and light sleep percentages, they have a **negative** correlation as well.
+
+
+### b. Sleep Efficiency v.s. REM Sleep Percentage v.s. Exercise Frequency
+```{r}
+scatterplot3d(
+  x = data$Sleep.efficiency,
+  y = data$REM.sleep.percentage,
+  z = data$Exercise.frequency,
+  color = "#8b5aa1",  
+  pch = 19,         
+  main = "3D Scatter Plot",
+  xlab = "Sleep.efficiency",
+  ylab = "REM.sleep.percentage",
+  zlab = "Exercise.frequency"
+)
+```
+
+From this scatter plot, we can see that the data points are **more scattered** around. This could portray the idea that these 3 variable perhaps are **less correlated** with each other, meaning that they have a correlation coefficient **close to 0**.
+
+### c. Sleep Efficiency v.s. Age v.s. REM Sleep Percentage
+```{r}
+scatterplot3d(
+  x = data$Sleep.efficiency,
+  y = data$Age,
+  z = data$REM.sleep.percentage,
+  color = "#8a3a4a",   
+  pch = 19,           
+  main = "3D Scatter Plot",
+  xlab = "Sleep.efficiency",
+  ylab = "Age",
+  zlab = "REM.sleep.percentage"
+)
+```
+
+This scatter plot also has data points **scattering around**. Thus, this plot also tells us that perhaps these 3 variables are **less correlated** with each other, and they have a correlation coefficient **close to 0**.
+
+## Histogram & Density Plot
+### a.Age
+```{r}
+his <- ggplot(data, aes(x = Age)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#697CF6", color = "black", bins = 15) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Age",
+    x = "Age",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+den <- ggplot(data, aes(x = Age)) +
+  geom_density(color = "black", fill = "#697CF6") +
+  labs(
+    title = "Density Plot of The Age",
+    x = "Age",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+skewness <- mean((data$Age - mean(data$Age))^3) / (sd(data$Age)^3)
+cat("Skewness:", skewness, "\n")
+
+library(e1071)
+
+kurtosis_value <- kurtosis(data$Age)
+cat("Kurtosis:", kurtosis_value, "\n")
+
+grid.arrange(his, den, ncol = 2)
+```
+
+I decided to use a histogram to illustrate the distribution of age in the dataset. The reason behind this is because the values of age are **integers**, and they range from 9 to 69. Hence, it would be a good idea to use histogram combined with density curve in order to observe the **distribution** of test subject's age. It can be observed that most test subjects fall between the age of around **20 to 30, and 40 to 60**. The density plot illustrates the same concept, but the curve is more **smooth**. Furthermore, the value of skewness is **positive** and close to **0**, which means that the distribution is **right skewed** and it's close to **symmetrically** distributed. In addition, the value of kutosis indicates a **platykurtic** distribution. The distribution has **thinner tails** and a **flatter peak**. It also suggests that the data has **fewer outliers**, and extreme values are **less common**.
+
+### b.Exercise Frequency 
+```{r}
+his <- ggplot(data, aes(x = Exercise.frequency)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#F2D95B", color = "black", bins = 10) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Exercise Frequency",
+    x = "Exercise Frequency (Days per Week)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+den <- ggplot(data, aes(x = Exercise.frequency)) +
+  geom_density(color = "black", fill = "#F2D95B") +
+  labs(
+    title = "Density Plot of The Exercise Frequency",
+    x = "Exercise Frequency",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+skewness <- mean((data$Exercise.frequency - mean(data$Exercise.frequency))^3) / (sd(data$Exercise.frequency)^3)
+cat("Skewness:", skewness, "\n")
+
+kurtosis_value <- kurtosis(data$Exercise.frequency)
+cat("Kurtosis:", kurtosis_value, "\n")
+
+grid.arrange(his, den, ncol = 2)
+```
+
+From this histogram and density plot, we can see that most test subjects exercise around 0 to 3 days per week, with a highest density around 3 days. The value of skewness is around 0.163, indicating that the distribution is **right skewed** and it's **slightly** close to **symmetrically** distributed. In addition, the **negative** value of kutosis tell us there is a **platykurtic** distribution.
+
+### c.Caffeine Consumption
+```{r}
+his <- ggplot(data, aes(x = Caffeine.consumption)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#7D5F32", color = "black", bins = 10) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Caffeine Consumption",
+    x = "Caffeine Consumption (mg)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+den <- ggplot(data, aes(x = Caffeine.consumption)) +
+  geom_density(color = "black", fill = "#7D5F32") +
+  labs(
+    title = "Density Plot of The Caffeine Consumption",
+    x = "Caffeine Consumption",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+skewness <- mean((data$Caffeine.consumption - mean(data$Caffeine.consumption))^3) / (sd(data$Caffeine.consumption)^3)
+cat("Skewness:", skewness, "\n")
+
+kurtosis_value <- kurtosis(data$Caffeine.consumption)
+cat("Kurtosis:", kurtosis_value, "\n")
+
+grid.arrange(his, den, ncol = 2)
+```
+
+It can be observed that most test subjects consume **none** caffeine. Though the number of test subjects consuming around **50** mg per day doesn't follow the trend, we can see that the number of test subjects **decreases** as the consumption amount **increases**. The value of skewness is roughly 0.682, indicating that the distribution is **more right skewed**. Also, the **negative** value of kutosis tell us there is a **platykurtic** distribution.
+
+### d.Alcohol Consumption
+```{r}
+his <- ggplot(data, aes(x = Alcohol.consumption)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#BA90F0", color = "black", bins = 10) + 
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Alcohol Consumption",
+    x = "Alcohol consumption (oz)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+den <- ggplot(data, aes(x = Alcohol.consumption)) +
+  geom_density(color = "black", fill = "#BA90F0") +
+  labs(
+    title = "Density Plot of The Alcohol Consumption",
+    x = "Alcohol Consumption",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+skewness <- mean((data$Alcohol.consumption - mean(data$Alcohol.consumption))^3) / (sd(data$Alcohol.consumption)^3)
+cat("Skewness:", skewness, "\n")
+
+kurtosis_value <- kurtosis(data$Alcohol.consumption)
+cat("Kurtosis:", kurtosis_value, "\n")
+
+grid.arrange(his, den, ncol = 2)
+```
+
+It can be observed from both the histogram and density polt that most test subjects consume **none** alcohol. In addition, there are still some test subjects who consume alcohol, but their density is **about the same**, while **slightly decreasing** as the consumption level increases. Both the value of skewness and kutosis reinforce the idea. The value of skewness is around 1.139, showing that the distribution is **more right skewed**. The **positive** value of kutosis tell us there is a **leptokurtic** distribution, meaning that the distribution has **fatter tails** and a **sharper peak**. It also suggests that the data has **more outliers**, and extreme values occur **more frequently**.
+
+## Trend Plot
+### a. Age v.s. Gender
+```{r}
+trend <- ggplot(data, aes(x = Age, y = Gender)) +
+  geom_point() +  
+  geom_smooth(method = "lm", se = FALSE) +  
+  labs(
+    title = "Trend Plot",
+    x = "Age",
+    y = "Gender"
+  ) +
+  theme_minimal()
+
+print(trend)
+```
+
+The trend plot allows us to see the **trend (pattern) over time**. Also it can show us the **distribution** of test subjects when comparing 2 variables. From this trend plot, it is illustrated that the test subjects age under **20** are mostly **female**, and there're more **males** than females above the age of **60**. This could imply that if gender is a significant factor affecting the sleep efficiency, the analysis under age 20 and above 60 could lead to **inaccurate** results.
+
+## Faceted Plot
+```{r}
+faceted <- ggplot(data, aes(x = Age, y = Smoking.status)) +
+  geom_point() +
+  facet_wrap(~Gender) + 
+  labs(
+    title = "Faceted Plot",
+    x = "Age",
+    y = "Smoking.status"
+  ) +
+  theme_minimal()
+
+print(faceted)
+```
+
+Faceted plots provide us a way to visualize data with **multiple subplots**, each representing a **subset** of the data. From this faceted plot, it is demonstrated that there are **more non-smokers**, and they are **more female non-smokers** than male non-smokers. Furthermore, there're **more male smokers** than female smokers. The majority of male smokers fall in the age around **40 ~ 60**.
+
+## Bar Plot
+```{r}
+library(tidyr)
+
+highest_index <- which.max(data$Sleep.efficiency)
+lowest_index <- which.min(data$Sleep.efficiency)
+
+
+
+selected <- c(highest_index, lowest_index)
+t <- data[data$ID %in% selected, c("ID", "REM.sleep.percentage", "Deep.sleep.percentage", "Light.sleep.percentage")]
+
+data_long <- pivot_longer(t, cols = c(REM.sleep.percentage, Deep.sleep.percentage, Light.sleep.percentage), names_to = "Variable")
+
+ggplot(data_long, aes(x = ID, y = value, fill = Variable)) +
+  geom_bar(stat = "identity", position = "dodge", width = 5) +
+  labs(x = "ID", y = "Value(%)", fill = "Variable") +
+  theme_minimal() +
+  ggtitle("Bar Plot For The Highest Value of Sleep Efficiency & The Stages of Sleep")
+```
+
+This bar plot compares the percentage of the sleep stages (deep sleep, light sleep, and REM sleep) for the test subjects that have the **highest** and **lowest** value of sleep efficiency. It is suggested that the test subject with the highest value of sleep efficiency has a **very high percentage of deep sleep**, and the lowest percentage is **light sleep**. On the other hand, the test subject with the lowest value of sleep efficiency has a **high percentage of light sleep**, and a low percentage of **deep sleep**.  
+
+# *5.Correlation Analysis*
+
+## Linear Regression
+### a. Scatter Plot For Sleep Duration & Sleep Efficiency
+```{r}
+ccompare <- data[, c("Sleep.duration", "Sleep.efficiency")]
+
+ggplot(ccompare, aes(x = Sleep.efficiency, y = Sleep.duration)) +
+  geom_point(color = "#266d96", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "#266d96") +
+  labs(x = "Sleep Efficiency", y = "Sleep Duration", title = "Scatter Plot of The Relationship Between Sleep Duration & Sleep Efficiency")
+
+correlation <- cor(data$Sleep.duration, data$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+The scatter plot with regression line shows the correlation of 2 variables. By looking at the plot and the r-value, we can say that sleep duration and sleep efficiency **does not have any correlation**.
+
+### b. Scatter Plot For Sleep Efficiency & REM Sleep Percentage
+```{r}
+compare <- data[, c("REM.sleep.percentage", "Sleep.efficiency")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = REM.sleep.percentage)) +
+  geom_point(color = "#8b5aa1", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "#8b5aa1") +
+  labs(x = "Sleep Efficiency", y = "REM.sleep.percentage", title = "Scatter Plot of The Relationship Between REM Sleep Percentage & Sleep Efficiency")
+
+correlation <- cor(data$REM.sleep.percentage, data$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+The scatter plot for sleep efficiency and REM sleep percentage implies that they have a **very weak positive correlation**. Yet, the r-value tells us that they almost have **no correlation at all** (very close to 0).
+
+### c. Scatter Plot For Sleep Efficiency & Age
+```{r}
+compare <- data[, c("Age", "Sleep.efficiency")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = Age)) +
+  geom_point(color = "#8a3a4a", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "#8a3a4a") +
+  labs(x = "Sleep Efficiency", y = "Age", title = "Scatter Plot of The Relationship Between Sleep Efficiency & Age")
+
+correlation <- cor(data$Age, data$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+By both the scatter plot and r-value, it can be inferred that the sleep efficiency and age has a **weak positive** correlation.
+
+# Conclusion
+
+By conducting EDA, I understand better about the **structure** of the dataset, as well as some **patterns**. For example, the **3D scatter plot** suggests that sleep efficiency is negatively correlated with light sleep percentage, and it's positively correlated with deep sleep percentage. From the **bar plot**, I find out that the test subject with the highest value of sleep efficiency has the highest percentage of deep sleep, and the lowest percentage of light sleep. Thus, both the 3D scatter plot and bar plot **convey the same message**, that is **in order to have a good night sleep, one needs to have higher percentage of deep sleep, and a lower percentage of light sleep**.
+
+# Possible Problems To Investigate For Future Studies
+
+1. Are deep sleep & light sleep the 2 most significant factors affecting the sleep efficiency or are there other factors ?
+
+2. Does other variables such as amount of time using smart phone affect sleep efficiency ?
+
+3. What is the best time of day to go to bed in order to achieve good quality of sleep ? 
+
+4. To predict whether one will have a good quality of sleep
+
+5. Does sleep efficiency affect the smoking status ? (Perhaps low sleep efficiency could cause stress and thus become a smoker?)
+

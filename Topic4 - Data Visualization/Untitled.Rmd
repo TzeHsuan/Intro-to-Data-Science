@@ -1,0 +1,652 @@
+---
+title: "楊子萱_110700049_hw04"
+author: "楊子萱"
+date: "2023-10-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+In order to analyze a dataset and conduct data visualization, I decided to use this dataset about the sleep efficiency. Since the dataset has some variables with outliers and missing data, I will analyze the dataset with and without outliers using visualization methods such as piechart, histogram, box plot, and scatter plot. Furthermore, I will check if Simpson's Paradox exists in this dataset. Last but not least, I will discuss some possible problems for future studies.
+
+# Check Type & Structure of Data 
+```{r}
+alldata = read.csv(file = 'Sleep_Efficiency.csv', header = TRUE, sep = ',')
+class(alldata)
+str(alldata)
+```
+# Data Visualization With Outliers
+
+## 1. Pie Chart Showing the Ratio of Gender
+```{r}
+library(dplyr)
+library(ggplot2)
+
+gen_counts <- alldata %>% 
+  group_by(Gender) %>% 
+  summarize(count = n())
+
+gen_counts <- gen_counts %>%
+  mutate(percentage = count / sum(count) * 100)
+
+pie_chart <- ggplot(gen_counts, aes(x = "", y = count, fill = Gender)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Gender Distribution") +
+  scale_fill_brewer(palette = "Set1") +  
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 4)
+
+print(pie_chart)
+```
+
+I used a pie chart because the values of gender are either "Male", or "Female" and they're in the format of text. Thus, it would be easier to know the gender distribution by just looking at the pie chart at first glance. The results show that the distribution are almost evenly distributed, half male and half female.
+
+## 2. Pie Chart Showing the Ratio of Smoking Status
+```{r}
+s_counts <- alldata %>% 
+  group_by(Smoking.status ) %>% 
+  summarize(count = n())
+
+s_counts <- s_counts %>%
+  mutate(percentage = count / sum(count) * 100)
+
+pie_chart <- ggplot(s_counts, aes(x = "", y = count, fill = Smoking.status)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Smoking Status Distribution") +
+  scale_fill_brewer(palette = "Set3") +  
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 4)
+
+print(pie_chart)
+```
+
+The reason I chose to use a pie chart to demonstrate the smoking status distribution is the same as gender. The results show that there are more non-smokers than smokers.
+
+## 3. Histogram For The Age
+```{r}
+his <- ggplot(alldata, aes(x = Age)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#697CF6", color = "black", bins = 15) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Age",
+    x = "Age",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(his)
+```
+
+I decided to use a histogram to illustrate the distribution of age in the dataset. The reason behind this is because the values of age are integers, and they range from 9 to 69. Hence, it would be a good idea to use histogram combined with density curve in order to observe the distribution of test subject's age. It can be observed that most test subjects fall between the age of around 20 to 30, and 40 to 60.
+
+## 4. Histogram For The Exercise Frequency 
+```{r}
+his <- ggplot(alldata, aes(x = Exercise.frequency)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#F2D95B", color = "black", bins = 10) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Exercise Frequency",
+    x = "Exercise Frequency (Days per Week)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(his)
+```
+
+The reason I chose to use a histogram and density curve to demonstrate the exercise frequency distribution is the same as age. We can see that most test subjects exercise around 0 to 3 days per week.
+
+## 5. Histogram For The Caffeine Consumption
+```{r}
+his <- ggplot(alldata, aes(x = Caffeine.consumption)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#7D5F32", color = "black", bins = 10) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Caffeine Consumption",
+    x = "Caffeine Consumption (mg)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(his)
+```
+
+The reason I decided to use a histogram and density curve to demonstrate the caffeine consumption distribution is the same as age. It can be observed that most test subjects consume none caffeine. Though the number of test subjects consuming around 50 mg per day doesn't follow the trend, we can see that the number of test subjects decreases as the consumption amounr increases.
+
+## 6. Histogram For The Alcohol Consumption
+```{r}
+his <- ggplot(alldata, aes(x = Alcohol.consumption)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#BA90F0", color = "black", bins = 10) + 
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Alcohol Consumption",
+    x = "Alcohol consumption (oz)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(his)
+```
+
+The reason I decided to use a histogram and density curve to illustrate the alcohol consumption distribution is the same as age. It can be observed that most test subjects consume none alcohol. In addition, there are still some test subjects who consume alcohol, but their density is about the same, while slightly decreasing as the consumption level increases. 
+
+## 7. QQ Plot For Sleep Efficiency
+```{r}
+qqnorm(alldata$Sleep.efficiency, main = "QQ Plot of Sleep Efficiency")
+qqline(alldata$Sleep.efficiency, col = 2) 
+```
+
+The reason I used a QQ plot is because I wanted to find out if the sleep efficiency follows a normal distribution. From the plot, we can see that it does not follow a normal distribution, and is skewed to the left.
+
+## 8. Box Plot For Sleep Duration
+```{r}
+box_pop <- boxplot(alldata$Sleep.duration,
+        main = "Box Plot For Sleep Duration",
+        xlab = "Sleep Duration",
+        ylab = "Values",
+        col = "#45DBD6",
+        border = "black")
+```
+
+The reason I used a box plot is because I wanted to find out whether sleep duration has any outliers. Also, the box plot gives me information about the central tendency, interquartile range, and the shape and skewness of distribution. This box plot illustrates that there are 2 outliers, the variety of sleep duration hours is small, and the distribution is slightly skewed to the left.
+
+## 9. Box Plot For Deep Sleep Percentage
+```{r}
+box_pop <- boxplot(alldata$Deep.sleep.percentage,
+        main = "Box Plot For Deep Sleep Percentage",
+        xlab = "Deep Sleep Percentage",
+        ylab = "Percentage",
+        col = "#1246A1",
+        border = "black")
+```
+
+The reason for using box plot is the same as sleep duration. The box plot shows that there is one outlier, the variety of percentages is slightly large, and the distribution is skewed to the left.
+
+## 10. Box Plot For Caffeine Consumption
+```{r}
+box_pop <- boxplot(alldata$Caffeine.consumption,
+        main = "Box Plot For Caffeine Consumption",
+        xlab = "Caffeine Consumption",
+        ylab = "Values (mg)",
+        col = "#7D5F32",
+        border = "black")
+```
+
+The reason for using box plot is the same as sleep duration. The box plot illustrates that there is one outlier, the variety of percentages is small, and the distribution is skewed to the right.
+
+# Data Visualization Without Outliers
+
+To analyze without outliers, I decided to delete the rows that either has missing values or has outliers. The box plots illustrate the variables that have outliers, and I will delete the rows based on that.
+
+```{r}
+cat("Number of rows with missing values:", sum(!complete.cases(alldata)), "\n")
+missing_counts <- colSums(is.na(alldata))
+columns_with_missing <- sum(missing_counts > 0)
+cat("Number of columns with missing values:", columns_with_missing, "\n")
+
+cleaned <- na.omit(alldata)
+
+outliers <- boxplot(cleaned$Sleep.duration, plot=FALSE)$out
+cleaned <- cleaned[!cleaned$Sleep.duration %in% outliers, ]
+outliers <- boxplot(cleaned$Caffeine.consumption, plot=FALSE)$out
+cleaned <- cleaned[!cleaned$Caffeine.consumption %in% outliers, ]
+```
+
+## 1. Pie Chart Showing the Ratio of Gender
+```{r}
+gen_counts <- cleaned %>% 
+  group_by(Gender) %>% 
+  summarize(count = n())
+
+gen_counts <- gen_counts %>%
+  mutate(percentage = count / sum(count) * 100)
+
+pie_chart <- ggplot(gen_counts, aes(x = "", y = count, fill = Gender)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Gender Distribution") +
+  scale_fill_brewer(palette = "Set1") +  
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 4)
+
+print(pie_chart)
+```
+
+Compared to the gender distribution pie chart with outliers, the ratio of male has decreased from 50.4% to 49.7%, and the ratio of female in the dataset has increased from 49.6% to 50.3%. This could be due to the outliers that we have deleted are mostly male.
+
+## 2. Pie Chart Showing the Ratio of Smoking Status
+```{r}
+s_counts <- cleaned %>% 
+  group_by(Smoking.status ) %>% 
+  summarize(count = n())
+
+s_counts <- s_counts %>%
+  mutate(percentage = count / sum(count) * 100)
+
+pie_chart <- ggplot(s_counts, aes(x = "", y = count, fill = Smoking.status)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +
+  labs(title = "Smoking Status Distribution") +
+  scale_fill_brewer(palette = "Set3") +  
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), size = 4)
+
+print(pie_chart)
+```
+
+Compared to the smoking status distribution pie chart with outliers, the ratio of smokers has decreased from 34.1% to 33.5%, and the ratio of non-smokers in the dataset has increased from 65.9% to 66.5%. This could be due to the outliers that we have deleted are mostly smokers.
+
+## 3. Histogram For The Age
+```{r}
+his <- ggplot(cleaned, aes(x = Age)) +
+  geom_histogram(aes(y = ..density..), fill = "#697CF6", color = "black", bins = 15) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Age",
+    x = "Age",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(his)
+```
+
+Compared to the histogram of age with outliers, there is not much difference. But, we can see that the density of some age has slightly decreased, such as the age of between 38 to 48. 
+
+## 4. Histogram For The Exercise Frequency 
+```{r}
+his <- ggplot(cleaned, aes(x = Exercise.frequency)) +
+  geom_histogram(aes(y = ..density..), fill = "#F2D95B", color = "black", bins = 10) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Exercise Frequency",
+    x = "Exercise Frequency (Days per Week)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(his)
+```
+
+Compared to the histogram of exercise frequency with outliers, there is not much difference. But, we can see that the density of a frequency of 0 has increased, while the density of a frequency of around 1 and 2 have decreased. By looking at the density curves, there is no obvious difference.
+
+## 5. Histogram For The Caffeine Consumption
+```{r}
+his <- ggplot(cleaned, aes(x = Caffeine.consumption)) +
+  geom_histogram(aes(y = ..density..), fill = "#7D5F32", color = "black", bins = 10) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Caffeine Consumption",
+    x = "Caffeine Consumption (mg)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(his)
+```
+
+Compared to the histogram of caffeine consumption with outliers, there is significant differences. For example, we can see that the caffeine consumption of 200 mg has been deleted from the dataset. Also, the density of a consumtion of 0 has increased, while the others have decreased. 
+
+## 6. Histogram For The Alcohol Consumption
+```{r}
+his <- ggplot(cleaned, aes(x = Alcohol.consumption)) +
+  geom_histogram(aes(y = ..density..), fill = "#BA90F0", color = "black", bins = 10) +
+  geom_density(color = "red", lwd=1) +
+  labs(
+    title = "Histogram of The Alcohol Consumption",
+    x = "Alcohol onsumption (oz)",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(his)
+```
+
+Compared to the histogram of alcohol consumption with outliers, there is not much difference. Yet, we can see that the density of some consumption has slightly decreased, such as the consumption of around 2 oz. By looking at the desity curves, there is no obvious difference.
+
+## 7. QQ Plot For Sleep Efficiency
+```{r}
+qqnorm(cleaned$Sleep.efficiency, main = "QQ Plot of Sleep Efficiency")
+qqline(cleaned$Sleep.efficiency, col = 2) 
+```
+
+Compared to the QQ plot of sleep efficiency with outliers, the deletion of outliers has made the distribution of sleep efficiency closer to a normal distribution, there are more points lying closer to the reference line.
+
+## 8. Box Plot For Sleep Duration
+```{r}
+box_pop <- boxplot(cleaned$Sleep.duration,
+        main = "Box Plot For Sleep Duration",
+        xlab = "Sleep Duration",
+        ylab = "Values",
+        col = "#45DBD6",
+        border = "black")
+```
+
+Compared to the box plot for sleep duration with outliers, we can clearly see that the two outliers have been removed.
+
+## 9. Box Plot For Deep Sleep Percentage
+```{r}
+box_pop <- boxplot(cleaned$Deep.sleep.percentage,
+        main = "Box Plot For Deep Sleep Percentage",
+        xlab = "Deep Sleep Percentage",
+        ylab = "Percentage",
+        col = "#1246A1",
+        border = "black")
+```
+
+Compared to the box plot for deep sleep percentage with outliers, we can clearly see that the outlier at the bottom has been removed.
+
+## 10. Box Plot For Caffeine Consumption
+```{r}
+box_pop <- boxplot(cleaned$Caffeine.consumption,
+        main = "Box Plot For Caffeine Consumption",
+        xlab = "Caffeine Consumption",
+        ylab = "Values (mg)",
+        col = "#7D5F32",
+        border = "black")
+```
+
+Compared to the box plot for caffeine consumption with outliers, we can clearly see that the outlier lying at the top has been removed. Also, the median line has decreased to 0.
+
+## 11. Scatter Plot For Sleep Duration & Sleep Efficiency
+```{r}
+ccompare <- cleaned[, c("Sleep.duration", "Sleep.efficiency")]
+
+ggplot(ccompare, aes(x = Sleep.efficiency, y = Sleep.duration)) +
+  geom_point(color = "blue", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(x = "Sleep Efficiency", y = "Sleep Duration", title = "Scatter Plot of The Relationship Between Sleep Duration & Sleep Efficiency")
+
+correlation <- cor(cleaned$REM.sleep.percentage, cleaned$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+The scatter plot for sleep duration & sleep efficiency with outliers is displayed in the below "Simpson's Paradox" part. Comparing these two scatter plots, it can be observed that the relationship between the two variables has become slightly more positively related. The correlation coefficient has increased from 0.0623 to 0.0687.
+
+## 12. Scatter Plot For Sleep Efficiency & REM Sleep Percentage
+```{r}
+compare <- cleaned[, c("REM.sleep.percentage", "Sleep.efficiency")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = REM.sleep.percentage)) +
+  geom_point(color = "blue", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(x = "Sleep Efficiency", y = "REM.sleep.percentage", title = "Scatter Plot of The Relationship Between REM Sleep Percentage & Sleep Efficiency")
+
+correlation <- cor(cleaned$REM.sleep.percentage, cleaned$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+The scatter plot for REM sleep percentage & sleep efficiency with outliers is displayed in the below "Simpson's Paradox" part. Comparing these two scatter plots, it can be observed that the relationship between the two variables has become slightly more positively related. The correlation coefficient has increased from 0.0623 to 0.0687.
+
+## 13. Scatter Plot For Sleep Efficiency & Age
+```{r}
+compare <- cleaned[, c("Age", "Sleep.efficiency")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = Age)) +
+  geom_point(color = "blue", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(x = "Sleep Efficiency", y = "Age", title = "Scatter Plot of The Relationship Between Sleep Efficiency & Age")
+
+correlation <- cor(cleaned$Age, cleaned$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+The scatter plot for age & sleep efficiency with outliers is displayed in the below "Simpson's Paradox" part. Comparing these two scatter plots, it can be observed that the relationship between the two variables has become slightly more positively related. The correlation coefficient has increased from 0.0984 to 0.1197.
+
+
+# Simpson's Paradox
+
+## 1. Relationship Between Sleep Duration & Sleep Efficiency
+```{r}
+compare <- alldata[, c("Sleep.duration", "Sleep.efficiency")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = Sleep.duration)) +
+  geom_point(color = "blue", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(x = "Sleep Efficiency", y = "Sleep Duration", title = "Scatter Plot of The Relationship Between Sleep Duration & Sleep Efficiency")
+
+correlation <- cor(alldata$REM.sleep.percentage, alldata$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+### a. Considering Gender
+```{r}
+compare <- alldata[, c("Sleep.duration", "Sleep.efficiency", "Gender")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = Sleep.duration, color = Gender)) +
+  geom_point(shape = 19) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    x = "Sleep Efficiency",
+    y = "Sleep Duration",
+    title = "Scatter Plot of The Relationship Between Sleep Duration & Sleep Efficiency"
+  )
+
+
+# Separate the data by gender
+data_male <- compare[compare$Gender == "Male", ]
+data_female <- compare[compare$Gender == "Female", ]
+
+# Calculate correlation for males
+correlation_male <- cor(data_male$Sleep.efficiency, data_male$Sleep.duration)
+
+# Calculate correlation for females
+correlation_female <- cor(data_female$Sleep.efficiency, data_female$Sleep.duration)
+
+cat("Correlation for Males: ", correlation_male, "\n")
+cat("Correlation for Females: ", correlation_female, "\n")
+
+```
+
+There is some Simpson's Paradox existing. Before considering gender, there is almost no relationship between sleep duration and sleep efficiency. However, after considering gender, we can see that there is a weak negative correlation for female. Also, for male, the relationship between sleep duration and sleep efficiency has become weaker, almost showing no relationship at all.
+
+
+### b. Considering Smoking Status
+```{r}
+compare <- alldata[, c("Sleep.duration", "Sleep.efficiency", "Smoking.status")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = Sleep.duration, color = Smoking.status)) +
+  geom_point(shape = 19) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    x = "Sleep Efficiency",
+    y = "Sleep Duration",
+    title = "Scatter Plot of The Relationship Between Sleep Duration & Sleep Efficiency"
+  )
+
+smoke <- compare[compare$Smoking.status  == "Yes", ]
+no_smoke <- compare[compare$Smoking.status  == "No", ]
+
+correlation_smoke <- cor(smoke$Sleep.efficiency, smoke$Sleep.duration)
+correlation_nosmoke <- cor(no_smoke$Sleep.efficiency, no_smoke$Sleep.duration)
+
+cat("Correlation for Smoking: ", correlation_smoke, "\n")
+cat("Correlation for No Smoking: ", correlation_nosmoke, "\n")
+```
+
+There is some Simpson's Paradox existing. Before considering the smoking status, there is a very weak relationship between sleep duration and sleep efficiency. However, after considering the smoking status, we can see that there is a weak negative correlation for non-smokers. On the other hand, the relationship between sleep duration and sleep efficiency for smokers has become more positively correlated.
+
+### c. Considering Age
+```{r}
+compare <- alldata[, c("Sleep.duration", "Sleep.efficiency", "Age")]
+# Define the age groups
+compare$AgeGroup <- ifelse(compare$Age < 18, "Under 18",
+                            ifelse(compare$Age >= 18 & compare$Age <= 40, "18~40", "41~"))
+
+# Create the scatterplot with points colored by AgeGroup
+ggplot(compare, aes(x = Sleep.efficiency, y = Sleep.duration, color = AgeGroup)) +
+  geom_point(shape = 19) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    x = "Sleep Efficiency",
+    y = "Sleep Duration",
+    title = "Scatter Plot of The Relationship Between Sleep Duration & Sleep Efficiency"
+  )
+
+# Calculate correlation for each age group
+correlation_children <- cor(subset(compare, AgeGroup == "Under 18")$Sleep.efficiency, subset(compare, AgeGroup == "Under 18")$Sleep.duration)
+correlation_adults <- cor(subset(compare, AgeGroup == "18~40")$Sleep.efficiency, subset(compare, AgeGroup == "18~40")$Sleep.duration)
+correlation_elderly <- cor(subset(compare, AgeGroup == "41~")$Sleep.efficiency, subset(compare, AgeGroup == "41~")$Sleep.duration)
+
+cat("Correlation for Under 18: ", correlation_children, "\n")
+cat("Correlation for 18~40: ", correlation_adults, "\n")
+cat("Correlation for 41~: ", correlation_elderly, "\n")
+```
+
+I have split the age variable into 3 groups as shown above, and it is illustrated that there is some Simpson's Paradox existing. Before considering age, there is a very weak relationship between sleep duration and sleep efficiency. However, after considering the age, we can see that there is a weak negative correlation for age 41 and above. Also, for age under 18, there is a moderate negative correlation. Yet, the relationship between sleep duration and sleep efficiency for age between 18 to 40 has become weaker.
+
+## 2. Relationship Between Sleep Efficiency & REM Sleep Percentage
+```{r}
+compare <- alldata[, c("REM.sleep.percentage", "Sleep.efficiency")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = REM.sleep.percentage)) +
+  geom_point(color = "blue", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(x = "Sleep Efficiency", y = "REM.sleep.percentage", title = "Scatter Plot of The Relationship Between REM Sleep Percentage & Sleep Efficiency")
+
+correlation <- cor(alldata$REM.sleep.percentage, alldata$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+### a. Considering Gender & Smoking Status
+```{r}
+alldata$Gender_Smoke <- paste(alldata$Gender, alldata$Smoking.status)
+compare <- alldata[, c("REM.sleep.percentage", "Sleep.efficiency", "Gender_Smoke")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = REM.sleep.percentage, color = Gender_Smoke)) +
+  geom_point(shape = 19) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    x = "Sleep Efficiency",
+    y = "REM Sleep Percentage",
+    title = "Scatter Plot of The Relationship Between REM Sleep Percentage & Sleep Efficiency"
+  )
+
+data_male_s <- compare[compare$Gender_Smoke == "Male Yes", ]
+data_female_s<- compare[compare$Gender_Smoke == "Female Yes", ]
+data_male_n <- compare[compare$Gender_Smoke == "Male No", ]
+data_female_n<- compare[compare$Gender_Smoke == "Female No", ]
+
+correlation_male_s <- cor(data_male_s$Sleep.efficiency, data_male_s$REM.sleep.percentage)
+correlation_female_s <- cor(data_female_s$Sleep.efficiency, data_female_s$REM.sleep.percentage)
+correlation_male_n <- cor(data_male_n$Sleep.efficiency, data_male_n$REM.sleep.percentage)
+correlation_female_n <- cor(data_female_n$Sleep.efficiency, data_female_n$REM.sleep.percentage)
+
+cat("Correlation for Males Who Smoke: ", correlation_male_s, "\n")
+cat("Correlation for Females Who Smoke: ", correlation_female_s, "\n")
+cat("Correlation for Males Who Do Not Smoke: ", correlation_male_n, "\n")
+cat("Correlation for Females Who Do Not Smoke: ", correlation_female_n, "\n")
+```
+
+Since I thought it would be interesting to see how both gender and smoking status will affect the relationship between REM sleep percentage and sleep efficiency at the same time, I created another variable called "Gender_Smoke". It turned out that there is some Simpson's Paradox existing. For females, the relationship has become more positively related, while the females who do not smoke has a higher correlation coefficient than that who smoke. For males, the relationship has become negatively related, while the males who do not smoke has a more negative coefficient than that who smoke.
+
+### b. Considering Age
+```{r}
+compare <- alldata[, c("REM.sleep.percentage", "Sleep.efficiency", "Age")]
+compare$AgeGroup <- ifelse(compare$Age < 18, "Under 18",
+                            ifelse(compare$Age >= 18 & compare$Age <= 40, "18~40", "41~"))
+
+ggplot(compare, aes(x = Sleep.efficiency, y = REM.sleep.percentage, color = AgeGroup)) +
+  geom_point(shape = 19) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    x = "Sleep Efficiency",
+    y = "REM Sleep Percentage",
+    title = "Scatter Plot of The Relationship Between REM Sleep Percentage & Sleep Efficiency"
+  )
+
+correlation_children <- cor(subset(compare, AgeGroup == "Under 18")$Sleep.efficiency, subset(compare, AgeGroup == "Under 18")$REM.sleep.percentage)
+correlation_adults <- cor(subset(compare, AgeGroup == "18~40")$Sleep.efficiency, subset(compare, AgeGroup == "18~40")$REM.sleep.percentage)
+correlation_elderly <- cor(subset(compare, AgeGroup == "41~")$Sleep.efficiency, subset(compare, AgeGroup == "41~")$REM.sleep.percentage)
+
+cat("Correlation for Under 18: ", correlation_children, "\n")
+cat("Correlation for 18~40: ", correlation_adults, "\n")
+cat("Correlation for 41~: ", correlation_elderly, "\n")
+```
+
+There is some Simpson's Paradox existing. For age under 18, the correlation has become moderately positive correlated. Moreover, the age group of between 18 to 40 has a relationship of weakly negative. As for age 41 and above, they have a weak positive relationship, and the correlation coefficient has increased.
+
+
+## 3. Relationship Between Sleep Efficiency & Age
+```{r}
+compare <- alldata[, c("Age", "Sleep.efficiency")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = Age)) +
+  geom_point(color = "blue", shape = 19) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(x = "Sleep Efficiency", y = "Age", title = "Scatter Plot of The Relationship Between Sleep Efficiency & Age")
+
+correlation <- cor(alldata$Age, alldata$Sleep.efficiency)
+cat("Correlation coefficient (r-value):", correlation, "\n")
+```
+
+### Considering Gender & Smoking Status
+```{r}
+compare <- alldata[, c("Age", "Sleep.efficiency", "Gender_Smoke")]
+
+ggplot(compare, aes(x = Sleep.efficiency, y = Age, color = Gender_Smoke)) +
+  geom_point(shape = 19) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    x = "Sleep Efficiency",
+    y = "Age",
+    title = "Scatter Plot of The Relationship Between Age & Sleep Efficiency"
+  )
+
+data_male_s <- compare[compare$Gender_Smoke == "Male Yes", ]
+data_female_s<- compare[compare$Gender_Smoke == "Female Yes", ]
+data_male_n <- compare[compare$Gender_Smoke == "Male No", ]
+data_female_n<- compare[compare$Gender_Smoke == "Female No", ]
+
+correlation_male_s <- cor(data_male_s$Sleep.efficiency, data_male_s$Age)
+correlation_female_s <- cor(data_female_s$Sleep.efficiency, data_female_s$Age)
+correlation_male_n <- cor(data_male_n$Sleep.efficiency, data_male_n$Age)
+correlation_female_n <- cor(data_female_n$Sleep.efficiency, data_female_n$Age)
+
+cat("Correlation for Males Who Smoke: ", correlation_male_s, "\n")
+cat("Correlation for Females Who Smoke: ", correlation_female_s, "\n")
+cat("Correlation for Males Who Do Not Smoke: ", correlation_male_n, "\n")
+cat("Correlation for Females Who Do Not Smoke: ", correlation_female_n, "\n")
+```
+
+Interestingly, there exists some Simpson's Paradox. For female smokers, the relationship between sleep efficiency and age has a weak negative correlation. Yet, the relationship for female non-smokers has a weake positive correlation. As for males, they have a weak positive correlation, and their coefficients have incresed slightly.
+
+
+# Conclusion
+
+Data visualization, if used correctly, allows us to interpret data easily at first glance. Pie charts are used when we want to find out the ratio of each component. Histograms are used when we want to find out the frequencies within specific range of intervals. Box plots are used when we want to observe the distribution of data, with a summary of the data's central tendency, spread, and potential outliers. QQ plots are used when we want to assess if the data follows a particular distribution, such as normal distribution. Scatter plots are used when we want to visualize the relationship between 2 variables.
+
+By the Simpson's Paradox, we can find out how other variables may affect the original correlation with only 2 variables. From this dataset, I have found that there does exsist some Simpson's Paradox, which is quite interesting.
+
+
+# Possible Problems For Future Studies
+
+1. What varibles is the most significant factor affecting sleep efficiency ?
+
+2. Does other variables such as amount of time using smart phone affect sleep efficiency ?
+
+3. What is the best time of day to go to bed in order to achieve good quality of sleep ?
+
+4. To predict whether one will have a good quality of sleep
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

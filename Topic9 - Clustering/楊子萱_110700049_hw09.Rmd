@@ -1,0 +1,398 @@
+---
+title: "楊子萱_110700049_hw09"
+author: "楊子萱"
+date: "2023-12-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+In order to conduct the clustering models, I have chosen the dataset "Sleep_health_and_lifestyle_dataset". The models I will be using are listed below.
+
+# Clustering Models
+
+  1. Hierarchical Clustering
+  
+    a. Agglomerative Hierarchical Method
+    
+      i. Single Linkage
+      
+      ii. Complete Linkage
+      
+      iii. Average Linkage
+      
+    b. Divisive Hierarchical Method
+    
+      i. Complete Linkage
+      
+    c. Ward's Method
+      
+  2. K-Means Clustering
+  
+    a. K determined by the Elbow Method
+    
+    a. K determined by the Silhouette Method
+
+# Importing Libraries
+```{r}
+library(ggplot2)
+library(dplyr)
+library(nnet)
+library(irr)
+library(Metrics)
+library(pROC)
+library(e1071)
+library(cluster)
+library(tidyr)
+library(mclust)
+library(caret)
+```
+
+# Read Data
+```{r}
+data = read.csv(file = 'Sleep_health_and_lifestyle_dataset.csv', header = TRUE, sep = ',')
+```
+
+## b. Check Type & Structure of Data 
+```{r}
+class(data)
+str(data)
+```
+
+# 1. Hierarchical Clustering
+## a. Agglomerative Hierarchical Method
+### i. Single Linkage
+```{r}
+distances <- dist(data)
+hclust_result <- hclust(distances, method = "single")
+
+num_clusters <- 3
+
+clusters <- cutree(hclust_result, num_clusters)
+silhouette_score <- silhouette(clusters, distances)
+cluster_counts <- table(clusters)
+true_labels <- data$Quality.of.Sleep
+cluster_table <- table(clusters, true_labels)
+purity <- sum(apply(cluster_table, 2, max)) / sum(cluster_table)
+
+cat("Silhouette Score:", mean(silhouette_score[, "sil_width"]), "\n")
+cat("Purity:", purity, "\n")
+cat("\nNumber of Observations For Each Combination of Cluster Assignment:\n")
+print(cluster_table)
+cat("\nNumber of Observations in Each Cluster:\n")
+print(cluster_counts)
+
+
+plot(hclust_result, main = "Dendrogram for Agglomerative Clustering", xlab = "Quality.of.Sleep", sub = NULL)
+
+rect.hclust(hclust_result, k = num_clusters, border = 2:num_clusters)
+
+labels <- as.character(data$Quality.of.Sleep)
+labels[labels == "Nine"] <- "9"
+labels[labels == "Eight"] <- "8"
+labels[labels == "Seven"] <- "7"
+labels[labels == "Six"] <- "6"
+labels[labels == "Five"] <- "5"
+labels[labels == "Four"] <- "4"
+
+label_colors <- rainbow(num_clusters)[clusters]
+
+text(x = hclust_result$height, y = 0, labels = labels, col = label_colors, cex = 0.8)
+```
+
+The agglomerative clustering algorithm with single linkage starts with each data point as a single cluster, and then merges the two clusters with the smallest single-linkage distance until all data points belong to a single cluster. In single linkage, the distance between two clusters is defined as the shortest distance between any two points in the two clusters. The Silhouette Score is a measure of how similar an object is to its own cluster compared to other clusters. In order to have a nice balance between the silhouette score and the purity, I have set the number of clusters to 3. From the results, we can see that this algorithm achieves a **high** silhouette score, indicating that there're **well-defined clusters**. Besides, the purity is relatively **high**, meaning that on average, the clusters have a **good alignment** with true classes. Overall, the agglomerative clustering algorithm with single linkage seems to have identified **meaningful patterns** in the data.
+
+
+### ii. Complete Linkage
+```{r}
+hclust_result <- hclust(distances, method = "complete")
+
+num_clusters <- 4
+
+clusters <- cutree(hclust_result, num_clusters)
+silhouette_score <- silhouette(clusters, distances)
+cluster_counts <- table(clusters)
+true_labels <- data$Quality.of.Sleep
+cluster_table <- table(clusters, true_labels)
+purity <- sum(apply(cluster_table, 2, max)) / sum(cluster_table)
+
+cat("Silhouette Score:", mean(silhouette_score[, "sil_width"]), "\n")
+cat("Purity:", purity, "\n")
+cat("\nNumber of Observations For Each Combination of Cluster Assignment:\n")
+print(cluster_table)
+cat("\nNumber of Observations in Each Cluster:\n")
+print(cluster_counts)
+
+plot(hclust_result, main = "Dendrogram for Agglomerative Clustering (Complete Linkage)", xlab = "Quality.of.Sleep", sub = NULL)
+
+rect.hclust(hclust_result, k = num_clusters, border = 2:num_clusters)
+
+label_colors <- rainbow(num_clusters)[clusters]
+
+text(x = hclust_result$height, y = 0, labels = labels, col = label_colors, cex = 0.8, srt = 45)
+```
+
+In the complete linkage method, the distance between two clusters is defined as the maximum distance between their individual members. It tends to produce compact, spherical clusters because it considers the maximum distance between points in different clusters. Also, it may be sensitive to outliers and noise. In order to have a nice balance between the silhouette score and the purity, I have set the number of clusters to 3. Looking at the results, the silhouette score suggests that the algorithm has formed clusters with **reasonable** cohesion and separation. Besides, the purity score indicates that while clusters are relatively pure, there is **room for improvement** in terms of having more homogeneous clusters.
+
+### iii. Average Linkage
+```{r}
+hclust_result <- hclust(distances, method = "average")
+
+num_clusters <- 3
+clusters <- cutree(hclust_result, num_clusters)
+
+silhouette_score <- silhouette(clusters, distances)
+cluster_counts <- table(clusters)
+true_labels <- data$Quality.of.Sleep
+cluster_table <- table(clusters, true_labels)
+purity <- sum(apply(cluster_table, 2, max)) / sum(cluster_table)
+
+cat("Silhouette Score:", mean(silhouette_score[, "sil_width"]), "\n")
+cat("Purity:", purity, "\n")
+cat("\nNumber of Observations For Each Combination of Cluster Assignment:\n")
+print(cluster_table)
+cat("\nNumber of Observations in Each Cluster:\n")
+print(cluster_counts)
+
+plot(hclust_result, main = "Dendrogram for Agglomerative Clustering (Complete Linkage)", xlab = "Quality.of.Sleep", sub = NULL)
+rect.hclust(hclust_result, k = num_clusters, border = 2:num_clusters)
+label_colors <- rainbow(num_clusters)[clusters]
+text(x = hclust_result$height, y = 0, labels = labels, col = label_colors, cex = 0.8, srt = 45)
+```
+
+The average linkage between two clusters, and it's computed as the average of the pairwise distances (or similarities) between all points in the two clusters. Looking at the results, the **relatively high** silhouette score suggests that the clusters are **well-defined** and **distinct**. Additionally, the purity score indicates that the clusters contain a **good proportion of instances** from the same true class. It seems that **Cluster 3 is the largest** and has a diverse distribution of true labels. Cluster 1 is somewhat diverse as well, while **Cluster 2 is less varied** in terms of true labels.
+
+
+### iv. Ward's Method
+```{r}
+hc <- hclust(dist(data), method = "ward.D2")
+
+num_clusters <- 3
+
+clusters <- cutree(hc, k = num_clusters)
+silhouette_score <- silhouette(clusters, distances)
+cluster_counts <- table(clusters)
+true_labels <- data$Quality.of.Sleep
+cluster_table <- table(clusters, true_labels)
+purity <- sum(apply(cluster_table, 2, max)) / sum(cluster_table)
+
+cat("Silhouette Score:", mean(silhouette_score[, "sil_width"]), "\n")
+cat("Purity:", purity, "\n")
+cat("\nNumber of Observations For Each Combination of Cluster Assignment:\n")
+print(cluster_table)
+cat("\nNumber of Observations in Each Cluster:\n")
+print(cluster_counts)
+
+plot(hc, main = "Hierarchical Clustering Dendrogram - Ward's Method", xlab = "Observations", sub = NULL)
+rect.hclust(hc, k = num_clusters, border = 2:num_clusters)
+label_colors <- rainbow(num_clusters)[clusters]
+text(x = hc$height, y = 0, labels = labels, col = label_colors, cex = 0.8, srt = 45)
+```
+
+The goal of Ward's method is to minimize the variance within each cluster. The criterion for merging two clusters is based on the increase in the sum of squared differences within the resulting merged cluster. It's suitable for datasets where compact, spherical clusters are expected. Looking at the results, the silhouette score suggests that the algorithm has formed clusters with **reasonable** cohesion and separation. Besides, the purity score indicates that while clusters are relatively pure, there is **room for improvement** in terms of having more homogeneous clusters. **Cluster3 is the largest** and has a diverse distribution of true labels, and followed by Cluster2.
+
+## b. Divisive Hierarchical Method
+### i. Complete Linkage
+```{r}
+d_clusters <- diana(data)
+
+num_clusters <- 3
+
+clusters <- cutree(d_clusters, k = num_clusters)
+silhouette_score <- silhouette(clusters, distances)
+cluster_counts <- table(clusters)
+true_labels <- data$Quality.of.Sleep
+cluster_table <- table(clusters, true_labels)
+purity <- sum(apply(cluster_table, 2, max)) / sum(cluster_table)
+
+cat("Silhouette Score:", mean(silhouette_score[, "sil_width"]), "\n")
+cat("Purity:", purity, "\n")
+cat("\nNumber of Observations For Each Combination of Cluster Assignment:\n")
+print(cluster_table)
+cat("\nNumber of Observations in Each Cluster:\n")
+print(cluster_counts)
+
+plot(d_clusters, main = "Dendrogram for Divisive Clustering Using Single Linkage", xlab = "Quality.of.Sleep", sub = NULL)
+rect.hclust(d_clusters, k = num_clusters, border = 2:num_clusters)
+label_colors <- rainbow(num_clusters)[clusters]
+text(x = d_clusters$height, y = 0, labels = labels, col = label_colors, cex = 0.8, srt = 45)
+```
+
+The divisive hierarchical method is an approach that involves dividing a dataset into clusters in a top-down manner. Looking at the above results, we can see that the **relatively high** silhouette score indicates a relatively good clustering, where instances within the same cluster are similar, and clusters are well-separated. Also, the purity suggests that the clusters are **relatively pure**, containing mostly instances from a single class. Furthermore, **Cluster 3 is the largest**, with instances from various classes, indicating a mix of different qualities of sleep. Overall, the clustering algorithm has created meaningful clusters with good internal cohesion and separation between clusters.
+
+
+
+
+
+# 2. K Means Clustering
+## a. K Determined by The Elbow Method
+```{r}
+set.seed(345)
+features <- data[, c("Sleep.Duration", "Stress.Level", "Heart.Rate")]
+
+ssd <- function(data, centers) {
+  sum(kmeans(data, centers)$withinss)
+}
+
+k_values <- 1:13
+ssd_values <- sapply(k_values, function(k) ssd(features, k))
+elbow <- data.frame(k = k_values, SSD = ssd_values)
+elbow$SSD_change <- c(0, diff(elbow$SSD))
+optimal_k <- elbow$k[which.max(elbow$SSD_change)]
+
+ggplot(elbow, aes(x = k, y = SSD)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Elbow Plot", x = "Number of Clusters (k)", y = "Sum of Squared Distances") +
+  geom_vline(xintercept = optimal_k, linetype = "dashed", color = "red") +
+  annotate("text", x = optimal_k, y = max(elbow$SSD), label = paste("Optimal k =", optimal_k), vjust = -0.5)
+
+kmeans_result <- kmeans(features, centers = optimal_k)
+km <- kmeans(features, optimal_k)
+clusplot(data[, -1], km$cluster, color = TRUE, shade = TRUE, labels = 2, main = "K-means Clustering For Optimal K")
+
+sil_scores <- silhouette(km$cluster, dist = dist(features))
+mean_sil_score <- mean(sil_scores[, "sil_width"])
+cat("Mean Silhouette Score:", mean_sil_score, "\n")
+
+silhouette_plot <- silhouette(kmeans_result$cluster, dist(features))
+plot(silhouette_plot, col = 1:optimal_k, border = NA)
+
+abline(v = mean_sil_score, lty = 2, col = "red")
+
+cat("Cluster Centers:\n")
+print(kmeans_result$centers)
+```
+
+The elbow plot illustrates the selection of appropriate number of clusters in k-means clustering. It helps to identify a value of k, where the addition of more clusters does not lead to a significant improvement in the compactness of clusters. It suggests a good trade-off between simplicity and accuracy. Moreover, the elbow point is the point in the plot at which the rate of decrease in the SSD starts to slow down, forming an elbow-like shape. From our plot, we can see that the elbow point is at **k=6**, which is the point of good estimation for the optimal number of clusters.
+
+In the context of a cluster plot, the phrase "These two components explain 56.65% of the point variability" is referring to the amount of variation in the original data that is captured by the first two principal components. Principal components are linear combinations of the original features, and they are derived in such a way that the first component captures the maximum variance, and the second component captures the second maximum variance. By using just these two principal components, we can account for **56.65%** of the variability present in the original data. Furthermore, there're many overlapping clusters. This indicates that the data points from different clusters are **not well-separated** based on the features used for clustering. It may imply that these features are not highly informative in distinguishing between the identified clusters. Also, the mean silhouette score **isn't very high**, suggesting that the clustering configuration is **alright but not perfect** for the data.
+
+From the silhouette plot, we can see that there are **6** clusters. Cluster 6 has the highest silhouette score of 0.80, and Cluster 2 has the largest number of data points, but has the lowest silhouette score. Beside, the plot has an average width of 0.57. The wider the width, the better-defined clusters. In our case, this width shows a **reasonably defined** clusters.
+
+
+## b. K Determined by The Silhouette Method
+```{r}
+set.seed(345)
+features <- data[, c("Sleep.Duration", "Stress.Level", "Heart.Rate")]
+
+calculate_silhouette <- function(data, k) {
+  kmeans_result <- kmeans(data, centers = k)
+  cluster_assignments <- kmeans_result$cluster
+  silhouette_scores <- silhouette(cluster_assignments, dist(data))
+  mean_silhouette <- mean(silhouette_scores[, "sil_width"])
+  return(mean_silhouette)
+}
+
+k_values <- 2:10
+
+silhouette_scores <- sapply(k_values, function(k) calculate_silhouette(features, k))
+optimal_k <- k_values[which.max(silhouette_scores)]
+mean_sil_score <- mean(silhouette_scores)
+cat("Mean Silhouette Score:", mean_sil_score, "\n")
+
+ggplot(data.frame(k = k_values, silhouette = silhouette_scores), aes(x = k, y = silhouette)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Silhouette Method for Optimal k", x = "Number of Clusters (k)", y = "Mean Silhouette Score") +
+  geom_vline(xintercept = optimal_k, linetype = "dashed", color = "red") +
+  annotate("text", x = optimal_k, y = max(silhouette_scores), label = paste("Optimal k =", optimal_k), vjust = -0.5)
+
+optimal_kmeans_result <- kmeans(features, centers = optimal_k)
+
+clusplot(features, optimal_kmeans_result$cluster, color = TRUE, shade = TRUE, labels = 2, main = "K-means Clustering (Optimal k)")
+
+kmeans_result <- kmeans(features, centers = optimal_k)
+silhouette_plot <- silhouette(kmeans_result$cluster, dist(features))
+plot(silhouette_plot, col = 1:optimal_k, border = NA)
+```
+
+The first plot illustrates that the optimal k determined by the silhouette method is **10**. Also, the mean silhouette score is 0.57, which is reasonable.
+
+Surprisingly, the cluster plot shows great results. By using just the two principal components, we can account for **94.65%** of the variability present in the original data, which is quite a lot.
+
+From the silhouette plot, we can see that there are **10** clusters. Cluster 2 has the highest silhouette score of 0.90, and Cluster 10 has the largest number of data points. Beside, the plot has an average width of 0.69. The wider the width, the better-defined clusters. In our case, this width shows a **good defined** clusters.
+
+
+## b. K Determined by The Cross-Validation Method
+```{r}
+ssd <- function(data, centers) {
+  sum(kmeans(data, centers)$withinss)
+}
+
+cross_val_ssd <- function(data, k, folds = 5) {
+  set.seed(123)
+  indices <- createFolds(seq_len(nrow(data)), k = folds, list = TRUE)
+  avg_ssd <- sapply(indices, function(fold_indices) {
+    train_data <- data[-unlist(fold_indices), ]
+    test_data <- data[unlist(fold_indices), ]
+    ssd(test_data[, c("Sleep.Duration", "Stress.Level", "Heart.Rate")], k)
+  }) %>%
+    unlist() %>%
+    mean()
+  return(avg_ssd)
+}
+
+k_values <- 1:13
+
+cv_ssd_values <- sapply(k_values, function(k) cross_val_ssd(features, k))
+
+optimal_k_cv <- k_values[which.min(cv_ssd_values)]
+
+kmeans_result <- kmeans(features, centers = optimal_k_cv)
+cat("Optimal number of clusters (k):", optimal_k_cv, "\n")
+
+silhouette_score <- silhouette(kmeans_result$cluster, dist(features))
+cat("Mean Silhouette Score:", mean(silhouette_score[, "sil_width"]), "\n")
+
+plot(features[, c("Sleep.Duration", "Stress.Level", "Heart.Rate")], 
+     col = kmeans_result$cluster, 
+     pch = 20, 
+     main = paste("K-Means Clustering (k =", optimal_k_cv, ")"))
+
+legend("topright", legend = unique(kmeans_result$cluster), 
+       col = 1:optimal_k_cv, pch = 20, title = "Clusters", 
+       xpd = TRUE, inset = c(0.005, 0.001))
+```
+
+K-means clustering with cross-validation involves using cross-validation techniques to assess the stability and performance of the algorithm. Cross-validation is a resampling method that helps estimate the model's performance on an independent dataset and avoid overfitting. It's sensitive to the initial placement of cluster centers, and the choice of the number of k can significantly impact the results. In our case, the chosen number for k is **13**, and the **high mean silhouette score** suggesting that the clustering configuration is appropriate.
+
+# 3. Gaussian Mixture Models (GMMs)
+```{r}
+features <- data[, c("Sleep.Duration", "Stress.Level", "Heart.Rate")]
+
+gmm_model <- Mclust(features)
+
+cluster_assignments <- predict(gmm_model)
+
+cat("BIC:", gmm_model$BIC, "\n")
+
+plot(gmm_model, what = "classification")
+
+points(features[, 1], features[, 2], col = cluster_assignments, pch = 20)
+
+text(features[, 1], features[, 2], labels = cluster_assignments, pos = 3)
+```
+
+From the plot above, we can see that there're ellipses, which represent the estimated clusters. Each ellipse illustrates the shape, orientation, and size of the cluster. As for the points, they're the actual data points plotted on the graph. Each point is placed according to its coordinates in the feature space.
+
+# Conclusion
+
+Through this assignment, I was able to investigate all kinds of different methods of clustering, and test its performance on my chosen dataset.
+
+For the hierarchical clustering, I have implemented both agglomerative method and divisive method. Despite the fact that for divisive method, I was only able to conduct the complete method without errors, it can be inferred from the results that both methods are performing equally well. Diving deeper into the agglomerative hierarchical method, we can see that both the **single linkage** and **average linkage** have the best silhouette scores and purity. On the other hand, **complete linkage** and **ward's method** are not performing as well, with lower evaluation metrics.
+
+
+As for the k-means clustering, the optimal k is **6** for both the elbow method, and **10** for the silhouette method. While for cross-validation method, the optimal k is **13**. By comparing the silhouette scores and the plots, I think the **cross validation method** performs the best, since it has the highest mean silhouette score.
+
+
+# Future Work
+
+1. To generate more data points, and see whether the size affects the clustering performance.
+
+2. Since I was unable to conduct simple and average linkage methods for divisive hierarchical clustering, I could try to use python to write the code next time.
+

@@ -1,0 +1,1603 @@
+---
+title: "楊子萱_110700049_hw08"
+author: "楊子萱"
+date: "2023-11-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+
+In order to conduct text mining, I decided to use the dataset about **Sleep efficiency**. Even though this dataset **doesn't contain variables, whose values are sentences**, I would like to use text mining to evaluate the variables in the **date and time format**. The text mining techniques I will be using are listed below. To prevent the problem of **over-fitting**, I will split the data into **training** set, **validation** set, and **test** set. Last but not least, I will be discussing some possible problems for future studies.
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Text Mining Techniques
+
+    1. Text Data Preprocessing
+    
+      a. Tokenization
+      
+      b. Feature Engineering
+    
+    2. Frequency Analysis
+      
+      a. Frequency Table
+      
+      b. Bar Plot
+      
+      c. Pie Chart
+      
+      d. Word Cloud
+    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Classification Techniques
+  
+    1. Naive Bayes
+    
+    2. Multinomial Logistic Regression
+    
+    3. Random Forest
+    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Data Preprocessing
+## Check Type & Structure of Data 
+```{r}
+data = read.csv(file = 'Sleep_Efficiency.csv', header = TRUE, sep = ',')
+class(data)
+str(data)
+```
+
+## Check For Missing Data
+```{r}
+cat("Number of rows with missing values:", sum(!complete.cases(data)), "\n")
+
+missing_counts <- colSums(is.na(data))
+columns_with_missing <- sum(missing_counts > 0)
+cat("Number of columns with missing values:", columns_with_missing, "\n")
+
+if (columns_with_missing > 0) {
+  cat("Columns with missing values:", paste(names(missing_counts[missing_counts > 0]), collapse = ", "), "\n")
+  
+  cat("Number of missing values for each variable:\n")
+  for (col in names(missing_counts[missing_counts > 0])) {
+    cat(col, ":", missing_counts[col], "\n")
+  }
+}
+```
+
+## Check For Unique Values
+```{r}
+unique_values <- lapply(data, unique)
+
+for (i in seq_along(unique_values)) {
+  cat("Variable:", names(unique_values)[i], "\n")
+  print(unique_values[[i]])
+  cat("\n")
+}
+```
+
+## Bucketing
+```{r}
+data$Sleep.efficiency.range <- cut(data$Sleep.efficiency,
+                                   breaks = c(0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+                                   labels = c("0.5~0.59", "0.6~0.69", "0.7~0.79", "0.8~0.89", "0.9~0.99"),
+                                   include.lowest = TRUE)
+
+table(data$Sleep.efficiency.range)
+```
+
+
+## Summary of Correlation
+```{r}
+library(corrplot)
+
+num_col <- sapply(data, function(x) is.numeric(x))
+num <- data[, num_col]
+
+correlation_matrix <- cor(num, use = "complete.obs")
+
+corrplot(correlation_matrix,
+         method = "color",  
+         type = "upper", 
+         tl.cex = 0.7,   
+         tl.col = "black" 
+)
+```
+
+
+## Handling Missing Data
+### Awakenings
+#### Distribution
+```{r}
+library(ggplot2)
+
+ggplot(data, aes(x = Awakenings)) +
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Density Plot for Awakenings", x = "Awakenings", y = "Density")
+```
+
+#### Mean Imputation
+```{r}
+library(Hmisc)
+
+mean <- mean(data$Awakenings, na.rm = TRUE)
+
+cat("Mean:", mean, "\n")
+
+data$Awakenings <- impute(data$Awakenings, fun = mean)
+```
+
+### Caffeine.consumption
+#### Distribution
+```{r}
+ggplot(data, aes(x = Caffeine.consumption)) +
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Density Plot for Caffeine.consumption", x = "Caffeine.consumption", y = "Density")
+```
+
+#### Mean Imputation
+```{r}
+mean <- mean(data$Caffeine.consumption, na.rm = TRUE)
+
+cat("Mean:", round(mean), "\n")
+
+data$Caffeine.consumption <- impute(data$Caffeine.consumption, fun = round(mean))
+```
+
+### Alcohol.consumption
+#### Distribution
+```{r}
+ggplot(data, aes(x = Alcohol.consumption)) +
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Density Plot for Alcohol.consumption", x = "Alcohol.consumption", y = "Density")
+```
+
+#### Mean Imputation
+```{r}
+mean <- mean(data$Alcohol.consumption, na.rm = TRUE)
+
+cat("Mean:", round(mean), "\n")
+
+data$Alcohol.consumption <- impute(data$Alcohol.consumption, fun = round(mean))
+```
+
+### Exercise.frequency 
+#### Distribution
+```{r}
+ggplot(data, aes(x = Exercise.frequency )) +
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Density Plot for Exercise.frequency ", x = "Exercise.frequency ", y = "Density")
+```
+
+#### Mean Imputation
+```{r}
+mean <- mean(data$Exercise.frequency, na.rm = TRUE)
+
+cat("Mean:", round(mean), "\n")
+
+data$Exercise.frequency <- impute(data$Exercise.frequency, fun = round(mean))
+```
+
+Based on the distribution and from past experiences in HW 3, I decided to use mean imputation to handle the missing data. Since the number of complete data compared to the number of missing data is too small, KNN method cannot be used.
+
+
+## Text Data Preprocessing
+### a. Tokenization
+#### Bedtime
+```{r}
+bedtime_values <- data$Bedtime
+
+tokenized_bedtime <- strsplit(bedtime_values, " ")
+max_elements <- max(sapply(tokenized_bedtime, length))
+padded_tokenized_bedtime <- lapply(tokenized_bedtime, function(x) c(x, rep(NA, max_elements - length(x))))
+
+tokenized_bedtime <- data.frame(do.call(rbind, padded_tokenized_bedtime))
+colnames(tokenized_bedtime) <- c("b_Y/M/D", "b_time", rep("", max_elements - 2))
+
+data <- cbind(data, tokenized_bedtime)
+
+print(head(tokenized_bedtime))
+```
+
+#### Wakeup.time
+```{r}
+waketime_values <- data$Wakeup.time
+
+tokenized_waketime <- strsplit(waketime_values, " ")
+max_elements <- max(sapply(tokenized_waketime, length))
+padded_tokenized_waketime <- lapply(tokenized_waketime, function(x) c(x, rep(NA, max_elements - length(x))))
+
+tokenized_waketime <- data.frame(do.call(rbind, padded_tokenized_waketime))
+colnames(tokenized_waketime) <- c("w_Y/M/D", "w_time", rep("", max_elements - 2))
+
+data <- cbind(data, tokenized_waketime)
+
+print(head(tokenized_waketime))
+```
+
+The original data format of "Bedtime" and "Wakeup.time" look something like this "2021-03-06 01:00:00". Thus, I used tokenization to separate the year/month/date and the time. 
+
+### b. Feature Engineering
+#### Bedtime
+```{r}
+data$Bedtime <- as.POSIXct(data$Bedtime, format="%Y-%m-%d %H:%M:%S")
+
+data$b_day_of_week <- weekdays(data$Bedtime)
+data$b_weekend <- ifelse(weekdays(data$Bedtime) %in% c("Saturday", "Sunday"), 1, 0)
+
+print(head(data[, c("Bedtime", "b_day_of_week", "b_weekend")]))
+```
+#### Wakeup.time
+```{r}
+data$Wakeup.time <- as.POSIXct(data$Wakeup.time, format="%Y-%m-%d %H:%M:%S")
+
+data$w_day_of_week <- weekdays(data$Wakeup.time)
+data$w_weekend <- ifelse(weekdays(data$Wakeup.time) %in% c("Saturday", "Sunday"), 1, 0)
+
+print(head(data[, c("Wakeup.time", "w_day_of_week", "w_weekend")]))
+```
+
+I realized that by performing feature engineering, I could extract extra features such as the day of week and whether the date is a weekday or weekend.
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Frequency Analysis
+## 1-1. Bedtime
+### a. Frequency Table
+```{r}
+freq_table <- summary(factor(data$b_time))
+freq_table_df <- as.data.frame(freq_table)
+print(freq_table_df)
+```
+
+### b. Bar Plot
+```{r}
+barplot(table(data$b_time), main = "Bar Plot For Bedtime", xlab = "Bedtime", ylab = "Frequency", col = "navy")
+```
+
+### c. Pie Chart
+```{r}
+pie(table(data$b_time), main = "Pie Chart For Bedtime")
+```
+
+
+### d. Word Cloud
+```{r}
+library(wordcloud)
+
+data$b_time <- as.character(data$b_time)
+
+time_descriptions <- data$b_time
+words <- unlist(strsplit(time_descriptions, "\\s+"))
+word_freqs <- table(words)
+word_freq_df <- data.frame(word = names(word_freqs), freq = as.numeric(word_freqs))
+
+if (nrow(word_freq_df) > 0) {
+  wordcloud(
+    words = word_freq_df$word,
+    freq = word_freq_df$freq,
+    min.freq = 1,
+    scale = c(3, 0.5),
+    colors = brewer.pal(8, "Dark2"),
+    random.order = FALSE, 
+    rot.per = 0.15, 
+    use.r.layout = FALSE 
+  )
+} else {
+  cat("Error: No data available for word cloud.\n")
+}
+```
+
+
+## 1-2. b_day_of_week
+### a. Frequency Table
+```{r}
+freq_table <- summary(factor(data$b_day_of_week))
+freq_table_df <- as.data.frame(freq_table)
+print(freq_table_df)
+```
+
+### b. Bar Plot
+```{r}
+barplot(table(data$b_day_of_week), main = "Bar Plot For Bedtime", xlab = "Bedtime", ylab = "Frequency", col = "navy")
+```
+
+### c. Pie Chart
+```{r}
+pie(table(data$b_day_of_week), main = "Pie Chart For Bedtime")
+```
+
+### d. Word Cloud
+```{r}
+data$b_day_of_week <- as.character(data$b_day_of_week)
+
+time_descriptions <- data$b_day_of_week
+words <- unlist(strsplit(time_descriptions, "\\s+"))
+word_freqs <- table(words)
+word_freq_df <- data.frame(word = names(word_freqs), freq = as.numeric(word_freqs))
+
+if (nrow(word_freq_df) > 0) {
+  wordcloud(
+    words = word_freq_df$word,
+    freq = word_freq_df$freq,
+    min.freq = 1,
+    scale = c(3, 0.5),
+    colors = brewer.pal(8, "Dark2"),
+    random.order = FALSE,
+    rot.per = 0.8,
+    use.r.layout = FALSE
+  )
+} else {
+  cat("Error: No data available for word cloud.\n")
+}
+```
+
+
+## 1-3. b_weekend
+### a. Frequency Table
+```{r}
+freq_table <- summary(factor(data$b_weekend))
+freq_table_df <- as.data.frame(freq_table)
+print(freq_table_df)
+```
+
+### b. Bar Plot
+```{r}
+barplot(table(data$b_weekend), main = "Bar Plot For Bedtime Weekday or Weekend", xlab = "Bedtime", ylab = "Frequency", col = "navy")
+```
+
+### c. Pie Chart
+```{r}
+pie(table(data$b_weekend), main = "Pie Chart For Bedtime Weekday or Weekend")
+```
+
+
+
+## 2. Waketime
+### a. Frequency Table
+```{r}
+freq_table <- summary(factor(data$w_time))
+freq_table_df <- as.data.frame(freq_table)
+print(freq_table_df)
+```
+
+### b. Bar Plot
+```{r}
+barplot(table(data$w_time), main = "Bar Plot For Wake-up Time", xlab = "Wake-up Time", ylab = "Frequency", col = "skyblue")
+```
+
+### c. Pie Chart
+```{r}
+pie(table(data$w_time), main = "Pie Chart For Wake-up Time")
+```
+
+### d. Word Cloud
+```{r}
+data$w_time <- as.character(data$w_time)
+
+time_descriptions <- data$w_time
+words <- unlist(strsplit(time_descriptions, "\\s+"))
+word_freqs <- table(words)
+word_freq_df <- data.frame(word = names(word_freqs), freq = as.numeric(word_freqs))
+
+if (nrow(word_freq_df) > 0) {
+  wordcloud(
+    words = word_freq_df$word,
+    freq = word_freq_df$freq,
+    min.freq = 1,
+    scale = c(3, 0.5),
+    colors = brewer.pal(8, "Dark2"),
+    random.order = FALSE,
+    rot.per = 0.1,
+    use.r.layout = FALSE
+  )
+} else {
+  cat("Error: No data available for word cloud.\n")
+}
+```
+
+## 2-2. w_day_of_week
+### a. Frequency Table
+```{r}
+freq_table <- summary(factor(data$w_day_of_week))
+freq_table_df <- as.data.frame(freq_table)
+print(freq_table_df)
+```
+
+### b. Bar Plot
+```{r}
+barplot(table(data$w_day_of_week), main = "Bar Plot For Wake-up Time", xlab = "Wake-up Time", ylab = "Frequency", col = "navy")
+```
+
+### c. Pie Chart
+```{r}
+pie(table(data$w_day_of_week), main = "Pie Chart For Wake-up Time")
+```
+
+### d. Word Cloud
+```{r}
+data$w_day_of_week <- as.character(data$w_day_of_week)
+
+time_descriptions <- data$w_day_of_week
+words <- unlist(strsplit(time_descriptions, "\\s+"))
+word_freqs <- table(words)
+word_freq_df <- data.frame(word = names(word_freqs), freq = as.numeric(word_freqs))
+
+if (nrow(word_freq_df) > 0) {
+  wordcloud(
+    words = word_freq_df$word,
+    freq = word_freq_df$freq,
+    min.freq = 1,
+    scale = c(3, 0.5),
+    colors = brewer.pal(8, "Dark2"),
+    random.order = FALSE,
+    rot.per = 0.8,
+    use.r.layout = FALSE
+  )
+} else {
+  cat("Error: No data available for word cloud.\n")
+}
+```
+
+
+## 1-3. w_weekend
+### a. Frequency Table
+```{r}
+freq_table <- summary(factor(data$w_weekend))
+freq_table_df <- as.data.frame(freq_table)
+print(freq_table_df)
+```
+
+### b. Bar Plot
+```{r}
+barplot(table(data$w_weekend), main = "Bar Plot For Wake-up Time Weekday or Weekend", xlab = "Wake-up Time", ylab = "Frequency", col = "navy")
+```
+
+### c. Pie Chart
+```{r}
+pie(table(data$b_weekend), main = "Pie Chart For Wake-up Time Weekday or Weekend")
+```
+
+
+
+
+
+
+# Split into Sets
+
+I will split the data into **70%** training, **15%** validation, and **15%** test sets.
+```{r}
+set.seed(123)
+
+total_rows <- nrow(data)
+indices <- sample(1:total_rows, total_rows)
+
+train_fraction <- 0.7
+validation_fraction <- 0.15
+test_fraction <- 0.15
+
+train_size <- floor(train_fraction * total_rows)
+validation_size <- floor(validation_fraction * total_rows)
+
+train <- data[indices[1:train_size], ]
+valid <- data[indices[(train_size + 1):(train_size + validation_size)], ]
+test <- data[indices[(train_size + validation_size + 1):total_rows], ]
+
+n_train <- nrow(train)
+n_valid <- nrow(valid)
+n_test <- nrow(test)
+
+cat("Number of data points in the training set:", n_train, "\n")
+cat("Number of data points in the validation set:", n_valid, "\n")
+cat("Number of data points in the test set:", n_test, "\n")
+```
+
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Classification
+## 1. Bedtime
+### a. Naive Bayes
+#### Considering Bedtime only
+```{r}
+library(e1071)
+library(nnet)
+library(irr)
+library(Metrics)
+library(pROC)
+
+nb_model <- naiveBayes(Sleep.efficiency.range ~ b_time, data = train)
+
+valid_predictions <- predict(nb_model, newdata = valid)
+
+confusion_matrix <- table(valid_predictions, valid$Sleep.efficiency.range)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test_predictions <- predict(nb_model, newdata = test)
+
+confusion_matrix_test <- table(test_predictions, test$Sleep.efficiency.range)
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_test)$value
+
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision, "\n")
+cat("Overall Recall on the test set:", overall_recall, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the test set:", kappa, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Without Considering Bedtime
+```{r}
+nb_model <- naiveBayes(Sleep.efficiency.range ~ Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage + b_weekend + b_day_of_week, data = train)
+
+valid_predictions <- predict(nb_model, newdata = valid)
+
+confusion_matrix <- table(valid_predictions, valid$Sleep.efficiency.range)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test_predictions <- predict(nb_model, newdata = test)
+
+confusion_matrix_test <- table(test_predictions, test$Sleep.efficiency.range)
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_test)$value
+
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision, "\n")
+cat("Overall Recall on the test set:", overall_recall, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the test set:", kappa, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Considering Possible Influencial Variables Bedtime
+```{r}
+nb_model <- naiveBayes(Sleep.efficiency.range ~ b_time + Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, data = train)
+
+valid_predictions <- predict(nb_model, newdata = valid)
+
+confusion_matrix <- table(valid_predictions, valid$Sleep.efficiency.range)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test_predictions <- predict(nb_model, newdata = test)
+
+confusion_matrix_test <- table(test_predictions, test$Sleep.efficiency.range)
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_test)$value
+
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision, "\n")
+cat("Overall Recall on the test set:", overall_recall, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the test set:", kappa, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+Comparing the above results, it can be interpreted that although the accuracies are not very high, naive bayes classification performs the best for the case of considering bedtime and all possible influential variables. It has the highest accuracy on both validation set and test set. The small number of data could be the reason for having higher accuracy on test sets than on validation set
+
+
+### b. Multinomial Logistic Regression
+#### Considering Bedtime only
+```{r}
+model <- multinom(Sleep.efficiency.range ~ b_time, data = train)
+
+train$Sleep.efficiency.range <- factor(train$Sleep.efficiency.range)
+valid$Sleep.efficiency.range <- factor(valid$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_classes <- predict(model, newdata = valid, type = "class")
+predicted_prob <- predict(model, newdata = valid, type = "probs")
+true_labels <- as.numeric(factor(valid$Sleep.efficiency.range))
+
+confusion_matrix <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test$Sleep.efficiency.range <- factor(test$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_test <- predict(model, newdata = test, type = "probs")
+predicted_classes_test <- predict(model, newdata = test, type = "class")
+true_labels_test <- as.numeric(factor(test$Sleep.efficiency.range))
+
+confusion_matrix_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_test)
+
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision_test <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall_test <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score_test <- 2 * (precision_test * recall_test) / (precision_test + recall_test)
+overall_precision_test <- mean(precision_test, na.rm = TRUE)
+overall_recall_test <- mean(recall_test, na.rm = TRUE)
+overall_f1_score_test <- mean(f1_score_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_test)$value
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Without Considering Bedtime
+```{r}
+model <- multinom(Sleep.efficiency.range ~ Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, data = train)
+
+train$Sleep.efficiency.range <- factor(train$Sleep.efficiency.range)
+valid$Sleep.efficiency.range <- factor(valid$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_classes <- predict(model, newdata = valid, type = "class")
+predicted_prob <- predict(model, newdata = valid, type = "probs")
+true_labels <- as.numeric(factor(valid$Sleep.efficiency.range))
+
+confusion_matrix <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test$Sleep.efficiency.range <- factor(test$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_test <- predict(model, newdata = test, type = "probs")
+predicted_classes_test <- predict(model, newdata = test, type = "class")
+true_labels_test <- as.numeric(factor(test$Sleep.efficiency.range))
+
+confusion_matrix_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_test)
+
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision_test <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall_test <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score_test <- 2 * (precision_test * recall_test) / (precision_test + recall_test)
+overall_precision_test <- mean(precision_test, na.rm = TRUE)
+overall_recall_test <- mean(recall_test, na.rm = TRUE)
+overall_f1_score_test <- mean(f1_score_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_test)$value
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Considering Possible Influencial Variables Bedtime
+```{r}
+model <- multinom(Sleep.efficiency.range ~ b_time + Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, data = train)
+
+train$Sleep.efficiency.range <- factor(train$Sleep.efficiency.range)
+valid$Sleep.efficiency.range <- factor(valid$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_classes <- predict(model, newdata = valid, type = "class")
+predicted_prob <- predict(model, newdata = valid, type = "probs")
+true_labels <- as.numeric(factor(valid$Sleep.efficiency.range))
+
+confusion_matrix <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test$Sleep.efficiency.range <- factor(test$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_test <- predict(model, newdata = test, type = "probs")
+predicted_classes_test <- predict(model, newdata = test, type = "class")
+true_labels_test <- as.numeric(factor(test$Sleep.efficiency.range))
+
+confusion_matrix_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_test)
+
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision_test <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall_test <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score_test <- 2 * (precision_test * recall_test) / (precision_test + recall_test)
+overall_precision_test <- mean(precision_test, na.rm = TRUE)
+overall_recall_test <- mean(recall_test, na.rm = TRUE)
+overall_f1_score_test <- mean(f1_score_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_test)$value
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+After comparing the above results, I would say that multinomial logistic regression performs the best on the case where bedtime and all possible influential variables are considered. This is because it has the highest accurcy on test set, and it doesn't have overfitting problems. It is interesting to see that the case where bedtime is not considered has overfitting issue, which mens that its accuracy and other metrics perform better on validation set than on test set.
+
+
+### c. Random Forest
+#### Considering Bedtime only
+```{r}
+library(randomForest)
+
+rf_model <- randomForest(as.factor(Sleep.efficiency.range) ~ b_time, 
+                         data = train, 
+                         ntree = 100,
+                         importance = TRUE)
+
+predicted_classes_rf <- predict(rf_model, newdata = valid)
+
+confusion_matrix_rf <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes_rf)
+
+accuracy_rf <- sum(diag(confusion_matrix_rf)) / sum(confusion_matrix_rf)
+precision_rf <- diag(confusion_matrix_rf) / rowSums(confusion_matrix_rf)
+recall_rf <- diag(confusion_matrix_rf) / colSums(confusion_matrix_rf)
+f1_score_rf <- 2 * (precision_rf * recall_rf) / (precision_rf + recall_rf)
+overall_precision_rf <- mean(precision_rf, na.rm = TRUE)
+overall_recall_rf <- mean(recall_rf, na.rm = TRUE)
+overall_f1_score_rf <- mean(f1_score_rf, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_rf)$value
+
+intersection <- sum(diag(confusion_matrix_rf))
+union <- sum(confusion_matrix_rf) + sum(confusion_matrix_rf) - sum(diag(confusion_matrix_rf))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf)
+cat("Accuracy on the validation set:", accuracy_rf, "\n")
+cat("Overall Precision on the validation set:", overall_precision_rf, "\n")
+cat("Overall Recall on the validation set:", overall_recall_rf, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score_rf, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+print("Variable Importance:")
+print(importance(rf_model))
+
+predicted_classes_rf_test <- predict(rf_model, newdata = test)
+
+confusion_matrix_rf_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_rf_test)
+
+accuracy_rf_test <- sum(diag(confusion_matrix_rf_test)) / sum(confusion_matrix_rf_test)
+precision_rf_test <- diag(confusion_matrix_rf_test) / rowSums(confusion_matrix_rf_test)
+recall_rf_test <- diag(confusion_matrix_rf_test) / colSums(confusion_matrix_rf_test)
+f1_score_rf_test <- 2 * (precision_rf_test * recall_rf_test) / (precision_rf_test + recall_rf_test)
+overall_precision_rf_test <- mean(precision_rf_test, na.rm = TRUE)
+overall_recall_rf_test <- mean(recall_rf_test, na.rm = TRUE)
+overall_f1_score_rf_test <- mean(f1_score_rf_test, na.rm = TRUE)
+kappa_rf_test <- kappam.fleiss(confusion_matrix_rf_test)$value
+intersection <- sum(diag(confusion_matrix_rf_test))
+union <- sum(confusion_matrix_rf_test) + sum(confusion_matrix_rf_test) - sum(diag(confusion_matrix_rf_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf_test)
+cat("Accuracy on the test set:", accuracy_rf_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_rf_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_rf_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_rf_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_rf_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Without Considering Bedtime
+```{r}
+rf_model <- randomForest(as.factor(Sleep.efficiency.range) ~ Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, 
+                         data = train, 
+                         ntree = 100,
+                         importance = TRUE)
+
+predicted_classes_rf <- predict(rf_model, newdata = valid)
+
+confusion_matrix_rf <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes_rf)
+
+accuracy_rf <- sum(diag(confusion_matrix_rf)) / sum(confusion_matrix_rf)
+precision_rf <- diag(confusion_matrix_rf) / rowSums(confusion_matrix_rf)
+recall_rf <- diag(confusion_matrix_rf) / colSums(confusion_matrix_rf)
+f1_score_rf <- 2 * (precision_rf * recall_rf) / (precision_rf + recall_rf)
+overall_precision_rf <- mean(precision_rf, na.rm = TRUE)
+overall_recall_rf <- mean(recall_rf, na.rm = TRUE)
+overall_f1_score_rf <- mean(f1_score_rf, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_rf)$value
+
+intersection <- sum(diag(confusion_matrix_rf))
+union <- sum(confusion_matrix_rf) + sum(confusion_matrix_rf) - sum(diag(confusion_matrix_rf))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf)
+cat("Accuracy on the validation set:", accuracy_rf, "\n")
+cat("Overall Precision on the validation set:", overall_precision_rf, "\n")
+cat("Overall Recall on the validation set:", overall_recall_rf, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score_rf, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+print("Variable Importance:")
+print(importance(rf_model))
+
+predicted_classes_rf_test <- predict(rf_model, newdata = test)
+
+confusion_matrix_rf_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_rf_test)
+
+accuracy_rf_test <- sum(diag(confusion_matrix_rf_test)) / sum(confusion_matrix_rf_test)
+precision_rf_test <- diag(confusion_matrix_rf_test) / rowSums(confusion_matrix_rf_test)
+recall_rf_test <- diag(confusion_matrix_rf_test) / colSums(confusion_matrix_rf_test)
+f1_score_rf_test <- 2 * (precision_rf_test * recall_rf_test) / (precision_rf_test + recall_rf_test)
+overall_precision_rf_test <- mean(precision_rf_test, na.rm = TRUE)
+overall_recall_rf_test <- mean(recall_rf_test, na.rm = TRUE)
+overall_f1_score_rf_test <- mean(f1_score_rf_test, na.rm = TRUE)
+kappa_rf_test <- kappam.fleiss(confusion_matrix_rf_test)$value
+intersection <- sum(diag(confusion_matrix_rf_test))
+union <- sum(confusion_matrix_rf_test) + sum(confusion_matrix_rf_test) - sum(diag(confusion_matrix_rf_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf_test)
+cat("Accuracy on the test set:", accuracy_rf_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_rf_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_rf_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_rf_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_rf_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+
+#### Considering Possible Influencial Variables Bedtime
+```{r}
+rf_model <- randomForest(as.factor(Sleep.efficiency.range) ~ b_time + Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, 
+                         data = train, 
+                         ntree = 100,
+                         importance = TRUE)
+
+predicted_classes_rf <- predict(rf_model, newdata = valid)
+
+confusion_matrix_rf <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes_rf)
+
+accuracy_rf <- sum(diag(confusion_matrix_rf)) / sum(confusion_matrix_rf)
+precision_rf <- diag(confusion_matrix_rf) / rowSums(confusion_matrix_rf)
+recall_rf <- diag(confusion_matrix_rf) / colSums(confusion_matrix_rf)
+f1_score_rf <- 2 * (precision_rf * recall_rf) / (precision_rf + recall_rf)
+overall_precision_rf <- mean(precision_rf, na.rm = TRUE)
+overall_recall_rf <- mean(recall_rf, na.rm = TRUE)
+overall_f1_score_rf <- mean(f1_score_rf, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_rf)$value
+
+intersection <- sum(diag(confusion_matrix_rf))
+union <- sum(confusion_matrix_rf) + sum(confusion_matrix_rf) - sum(diag(confusion_matrix_rf))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf)
+cat("Accuracy on the validation set:", accuracy_rf, "\n")
+cat("Overall Precision on the validation set:", overall_precision_rf, "\n")
+cat("Overall Recall on the validation set:", overall_recall_rf, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score_rf, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+print("Variable Importance:")
+print(importance(rf_model))
+
+predicted_classes_rf_test <- predict(rf_model, newdata = test)
+
+confusion_matrix_rf_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_rf_test)
+
+accuracy_rf_test <- sum(diag(confusion_matrix_rf_test)) / sum(confusion_matrix_rf_test)
+precision_rf_test <- diag(confusion_matrix_rf_test) / rowSums(confusion_matrix_rf_test)
+recall_rf_test <- diag(confusion_matrix_rf_test) / colSums(confusion_matrix_rf_test)
+f1_score_rf_test <- 2 * (precision_rf_test * recall_rf_test) / (precision_rf_test + recall_rf_test)
+overall_precision_rf_test <- mean(precision_rf_test, na.rm = TRUE)
+overall_recall_rf_test <- mean(recall_rf_test, na.rm = TRUE)
+overall_f1_score_rf_test <- mean(f1_score_rf_test, na.rm = TRUE)
+kappa_rf_test <- kappam.fleiss(confusion_matrix_rf_test)$value
+intersection <- sum(diag(confusion_matrix_rf_test))
+union <- sum(confusion_matrix_rf_test) + sum(confusion_matrix_rf_test) - sum(diag(confusion_matrix_rf_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf_test)
+cat("Accuracy on the test set:", accuracy_rf_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_rf_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_rf_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_rf_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_rf_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+
+By looking at the above results, I think random forest performs the best on the case that considers bedtime and all possible influential variables. It doesn't have overfitting issues and it has the highest accuracy on test set. Interestingly, the case that doesn't consider bedtime has the highest accuracy on validation set, but the accuracy on test set compared to validation set is quite low, meaning it may have serious overfitting issue.
+
+------------------------------------------------------------------------------------------------------------
+
+## 2. Wake-up Time
+### a. Naive Bayes
+#### Considering Wake-up Time only
+```{r}
+nb_model <- naiveBayes(Sleep.efficiency.range ~ w_time, data = train)
+
+valid_predictions <- predict(nb_model, newdata = valid)
+
+confusion_matrix <- table(valid_predictions, valid$Sleep.efficiency.range)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test_predictions <- predict(nb_model, newdata = test)
+
+confusion_matrix_test <- table(test_predictions, test$Sleep.efficiency.range)
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_test)$value
+
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision, "\n")
+cat("Overall Recall on the test set:", overall_recall, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the test set:", kappa, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Without Considering Wake-up Time
+```{r}
+nb_model <- naiveBayes(Sleep.efficiency.range ~ Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, data = train)
+
+valid_predictions <- predict(nb_model, newdata = valid)
+
+confusion_matrix <- table(valid_predictions, valid$Sleep.efficiency.range)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test_predictions <- predict(nb_model, newdata = test)
+
+confusion_matrix_test <- table(test_predictions, test$Sleep.efficiency.range)
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_test)$value
+
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision, "\n")
+cat("Overall Recall on the test set:", overall_recall, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the test set:", kappa, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Considering Possible Influencial Variables Wake-up Time
+```{r}
+nb_model <- naiveBayes(Sleep.efficiency.range ~ w_time + Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, data = train)
+
+valid_predictions <- predict(nb_model, newdata = valid)
+
+confusion_matrix <- table(valid_predictions, valid$Sleep.efficiency.range)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test_predictions <- predict(nb_model, newdata = test)
+
+confusion_matrix_test <- table(test_predictions, test$Sleep.efficiency.range)
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_test)$value
+
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision, "\n")
+cat("Overall Recall on the test set:", overall_recall, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the test set:", kappa, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+Comparing the above results, it can be seen that the naive bayes classification performs better in the cased where the wake-up time is not considered. It has the highest accuracy and other metrics for both validation and test set. All of the cases have metrics better for validation set than on test set, but the difference is smalll, and it's accecptable as it is normal to have slightly lower values on test set.
+
+
+### b. Multinomial Logistic Regression
+#### Considering Wake-up Time only
+```{r}
+model <- multinom(Sleep.efficiency.range ~ w_time, data = train)
+
+train$Sleep.efficiency.range <- factor(train$Sleep.efficiency.range)
+valid$Sleep.efficiency.range <- factor(valid$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_classes <- predict(model, newdata = valid, type = "class")
+predicted_prob <- predict(model, newdata = valid, type = "probs")
+true_labels <- as.numeric(factor(valid$Sleep.efficiency.range))
+
+confusion_matrix <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test$Sleep.efficiency.range <- factor(test$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_test <- predict(model, newdata = test, type = "probs")
+predicted_classes_test <- predict(model, newdata = test, type = "class")
+true_labels_test <- as.numeric(factor(test$Sleep.efficiency.range))
+
+confusion_matrix_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_test)
+
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision_test <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall_test <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score_test <- 2 * (precision_test * recall_test) / (precision_test + recall_test)
+overall_precision_test <- mean(precision_test, na.rm = TRUE)
+overall_recall_test <- mean(recall_test, na.rm = TRUE)
+overall_f1_score_test <- mean(f1_score_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_test)$value
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Without Considering Wake-up Time
+```{r}
+model <- multinom(Sleep.efficiency.range ~ Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, data = train)
+
+train$Sleep.efficiency.range <- factor(train$Sleep.efficiency.range)
+valid$Sleep.efficiency.range <- factor(valid$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_classes <- predict(model, newdata = valid, type = "class")
+predicted_prob <- predict(model, newdata = valid, type = "probs")
+true_labels <- as.numeric(factor(valid$Sleep.efficiency.range))
+
+confusion_matrix <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test$Sleep.efficiency.range <- factor(test$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_test <- predict(model, newdata = test, type = "probs")
+predicted_classes_test <- predict(model, newdata = test, type = "class")
+true_labels_test <- as.numeric(factor(test$Sleep.efficiency.range))
+
+confusion_matrix_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_test)
+
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision_test <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall_test <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score_test <- 2 * (precision_test * recall_test) / (precision_test + recall_test)
+overall_precision_test <- mean(precision_test, na.rm = TRUE)
+overall_recall_test <- mean(recall_test, na.rm = TRUE)
+overall_f1_score_test <- mean(f1_score_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_test)$value
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Considering Possible Influencial Variables Wake-up Time
+```{r}
+model <- multinom(Sleep.efficiency.range ~ w_time + Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, data = train)
+
+train$Sleep.efficiency.range <- factor(train$Sleep.efficiency.range)
+valid$Sleep.efficiency.range <- factor(valid$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_classes <- predict(model, newdata = valid, type = "class")
+predicted_prob <- predict(model, newdata = valid, type = "probs")
+true_labels <- as.numeric(factor(valid$Sleep.efficiency.range))
+
+confusion_matrix <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+f1_score <- 2 * (precision * recall) / (precision + recall)
+overall_precision <- mean(precision, na.rm = TRUE)
+overall_recall <- mean(recall, na.rm = TRUE)
+overall_f1_score <- mean(f1_score, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix)$value
+intersection <- sum(diag(confusion_matrix))
+union <- sum(confusion_matrix) + sum(confusion_matrix) - sum(diag(confusion_matrix))
+jaccard_index <- intersection / union
+
+print(confusion_matrix)
+cat("Accuracy on the validation set:", accuracy, "\n")
+cat("Overall Precision on the validation set:", overall_precision, "\n")
+cat("Overall Recall on the validation set:", overall_recall, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+test$Sleep.efficiency.range <- factor(test$Sleep.efficiency.range, levels = levels(train$Sleep.efficiency.range))
+
+predicted_test <- predict(model, newdata = test, type = "probs")
+predicted_classes_test <- predict(model, newdata = test, type = "class")
+true_labels_test <- as.numeric(factor(test$Sleep.efficiency.range))
+
+confusion_matrix_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_test)
+
+accuracy_test <- sum(diag(confusion_matrix_test)) / sum(confusion_matrix_test)
+precision_test <- diag(confusion_matrix_test) / rowSums(confusion_matrix_test)
+recall_test <- diag(confusion_matrix_test) / colSums(confusion_matrix_test)
+f1_score_test <- 2 * (precision_test * recall_test) / (precision_test + recall_test)
+overall_precision_test <- mean(precision_test, na.rm = TRUE)
+overall_recall_test <- mean(recall_test, na.rm = TRUE)
+overall_f1_score_test <- mean(f1_score_test, na.rm = TRUE)
+kappa_test <- kappam.fleiss(confusion_matrix_test)$value
+intersection <- sum(diag(confusion_matrix_test))
+union <- sum(confusion_matrix_test) + sum(confusion_matrix_test) - sum(diag(confusion_matrix_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_test)
+cat("Accuracy on the test set:", accuracy_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+The above results show that the multinomial logistic regression performs better in the case of considering wake-up time as well as other influential variables. It has the highest/best values of metrics for validation set and test set. Yet, the difference between validation set and test set indicate that there may be some minor overfitting issues
+
+
+
+### c. Random Forest
+#### Considering Wake-up Time only
+```{r}
+library(randomForest)
+
+rf_model <- randomForest(as.factor(Sleep.efficiency.range) ~ w_time, 
+                         data = train, 
+                         ntree = 100,
+                         importance = TRUE)
+
+predicted_classes_rf <- predict(rf_model, newdata = valid)
+
+confusion_matrix_rf <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes_rf)
+
+accuracy_rf <- sum(diag(confusion_matrix_rf)) / sum(confusion_matrix_rf)
+precision_rf <- diag(confusion_matrix_rf) / rowSums(confusion_matrix_rf)
+recall_rf <- diag(confusion_matrix_rf) / colSums(confusion_matrix_rf)
+f1_score_rf <- 2 * (precision_rf * recall_rf) / (precision_rf + recall_rf)
+overall_precision_rf <- mean(precision_rf, na.rm = TRUE)
+overall_recall_rf <- mean(recall_rf, na.rm = TRUE)
+overall_f1_score_rf <- mean(f1_score_rf, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_rf)$value
+
+intersection <- sum(diag(confusion_matrix_rf))
+union <- sum(confusion_matrix_rf) + sum(confusion_matrix_rf) - sum(diag(confusion_matrix_rf))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf)
+cat("Accuracy on the validation set:", accuracy_rf, "\n")
+cat("Overall Precision on the validation set:", overall_precision_rf, "\n")
+cat("Overall Recall on the validation set:", overall_recall_rf, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score_rf, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+print("Variable Importance:")
+print(importance(rf_model))
+
+predicted_classes_rf_test <- predict(rf_model, newdata = test)
+
+confusion_matrix_rf_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_rf_test)
+
+accuracy_rf_test <- sum(diag(confusion_matrix_rf_test)) / sum(confusion_matrix_rf_test)
+precision_rf_test <- diag(confusion_matrix_rf_test) / rowSums(confusion_matrix_rf_test)
+recall_rf_test <- diag(confusion_matrix_rf_test) / colSums(confusion_matrix_rf_test)
+f1_score_rf_test <- 2 * (precision_rf_test * recall_rf_test) / (precision_rf_test + recall_rf_test)
+overall_precision_rf_test <- mean(precision_rf_test, na.rm = TRUE)
+overall_recall_rf_test <- mean(recall_rf_test, na.rm = TRUE)
+overall_f1_score_rf_test <- mean(f1_score_rf_test, na.rm = TRUE)
+kappa_rf_test <- kappam.fleiss(confusion_matrix_rf_test)$value
+intersection <- sum(diag(confusion_matrix_rf_test))
+union <- sum(confusion_matrix_rf_test) + sum(confusion_matrix_rf_test) - sum(diag(confusion_matrix_rf_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf_test)
+cat("Accuracy on the test set:", accuracy_rf_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_rf_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_rf_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_rf_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_rf_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+#### Without Considering Wake-up Time
+```{r}
+rf_model <- randomForest(as.factor(Sleep.efficiency.range) ~ Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, 
+                         data = train, 
+                         ntree = 100,
+                         importance = TRUE)
+
+predicted_classes_rf <- predict(rf_model, newdata = valid)
+
+confusion_matrix_rf <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes_rf)
+
+accuracy_rf <- sum(diag(confusion_matrix_rf)) / sum(confusion_matrix_rf)
+precision_rf <- diag(confusion_matrix_rf) / rowSums(confusion_matrix_rf)
+recall_rf <- diag(confusion_matrix_rf) / colSums(confusion_matrix_rf)
+f1_score_rf <- 2 * (precision_rf * recall_rf) / (precision_rf + recall_rf)
+overall_precision_rf <- mean(precision_rf, na.rm = TRUE)
+overall_recall_rf <- mean(recall_rf, na.rm = TRUE)
+overall_f1_score_rf <- mean(f1_score_rf, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_rf)$value
+
+intersection <- sum(diag(confusion_matrix_rf))
+union <- sum(confusion_matrix_rf) + sum(confusion_matrix_rf) - sum(diag(confusion_matrix_rf))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf)
+cat("Accuracy on the validation set:", accuracy_rf, "\n")
+cat("Overall Precision on the validation set:", overall_precision_rf, "\n")
+cat("Overall Recall on the validation set:", overall_recall_rf, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score_rf, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+print("Variable Importance:")
+print(importance(rf_model))
+
+predicted_classes_rf_test <- predict(rf_model, newdata = test)
+
+confusion_matrix_rf_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_rf_test)
+
+accuracy_rf_test <- sum(diag(confusion_matrix_rf_test)) / sum(confusion_matrix_rf_test)
+precision_rf_test <- diag(confusion_matrix_rf_test) / rowSums(confusion_matrix_rf_test)
+recall_rf_test <- diag(confusion_matrix_rf_test) / colSums(confusion_matrix_rf_test)
+f1_score_rf_test <- 2 * (precision_rf_test * recall_rf_test) / (precision_rf_test + recall_rf_test)
+overall_precision_rf_test <- mean(precision_rf_test, na.rm = TRUE)
+overall_recall_rf_test <- mean(recall_rf_test, na.rm = TRUE)
+overall_f1_score_rf_test <- mean(f1_score_rf_test, na.rm = TRUE)
+kappa_rf_test <- kappam.fleiss(confusion_matrix_rf_test)$value
+intersection <- sum(diag(confusion_matrix_rf_test))
+union <- sum(confusion_matrix_rf_test) + sum(confusion_matrix_rf_test) - sum(diag(confusion_matrix_rf_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf_test)
+cat("Accuracy on the test set:", accuracy_rf_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_rf_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_rf_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_rf_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_rf_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+
+#### Considering Possible Influencial Variables Wake-up Time
+```{r}
+rf_model <- randomForest(as.factor(Sleep.efficiency.range) ~ w_time + Sleep.duration + Deep.sleep.percentage + Light.sleep.percentage, 
+                         data = train, 
+                         ntree = 100,
+                         importance = TRUE)
+
+predicted_classes_rf <- predict(rf_model, newdata = valid)
+
+confusion_matrix_rf <- table(Actual = valid$Sleep.efficiency.range, Predicted = predicted_classes_rf)
+
+accuracy_rf <- sum(diag(confusion_matrix_rf)) / sum(confusion_matrix_rf)
+precision_rf <- diag(confusion_matrix_rf) / rowSums(confusion_matrix_rf)
+recall_rf <- diag(confusion_matrix_rf) / colSums(confusion_matrix_rf)
+f1_score_rf <- 2 * (precision_rf * recall_rf) / (precision_rf + recall_rf)
+overall_precision_rf <- mean(precision_rf, na.rm = TRUE)
+overall_recall_rf <- mean(recall_rf, na.rm = TRUE)
+overall_f1_score_rf <- mean(f1_score_rf, na.rm = TRUE)
+kappa <- kappam.fleiss(confusion_matrix_rf)$value
+
+intersection <- sum(diag(confusion_matrix_rf))
+union <- sum(confusion_matrix_rf) + sum(confusion_matrix_rf) - sum(diag(confusion_matrix_rf))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf)
+cat("Accuracy on the validation set:", accuracy_rf, "\n")
+cat("Overall Precision on the validation set:", overall_precision_rf, "\n")
+cat("Overall Recall on the validation set:", overall_recall_rf, "\n")
+cat("Overall F1-Score on the validation set:", overall_f1_score_rf, "\n")
+cat("Cohen's Kappa on the validation set:", kappa, "\n")
+cat("Jaccard Index on the validation set:", jaccard_index, "\n")
+
+print("Variable Importance:")
+print(importance(rf_model))
+
+predicted_classes_rf_test <- predict(rf_model, newdata = test)
+
+confusion_matrix_rf_test <- table(Actual = test$Sleep.efficiency.range, Predicted = predicted_classes_rf_test)
+
+accuracy_rf_test <- sum(diag(confusion_matrix_rf_test)) / sum(confusion_matrix_rf_test)
+precision_rf_test <- diag(confusion_matrix_rf_test) / rowSums(confusion_matrix_rf_test)
+recall_rf_test <- diag(confusion_matrix_rf_test) / colSums(confusion_matrix_rf_test)
+f1_score_rf_test <- 2 * (precision_rf_test * recall_rf_test) / (precision_rf_test + recall_rf_test)
+overall_precision_rf_test <- mean(precision_rf_test, na.rm = TRUE)
+overall_recall_rf_test <- mean(recall_rf_test, na.rm = TRUE)
+overall_f1_score_rf_test <- mean(f1_score_rf_test, na.rm = TRUE)
+kappa_rf_test <- kappam.fleiss(confusion_matrix_rf_test)$value
+intersection <- sum(diag(confusion_matrix_rf_test))
+union <- sum(confusion_matrix_rf_test) + sum(confusion_matrix_rf_test) - sum(diag(confusion_matrix_rf_test))
+jaccard_index <- intersection / union
+
+print(confusion_matrix_rf_test)
+cat("Accuracy on the test set:", accuracy_rf_test, "\n")
+cat("Overall Precision on the test set:", overall_precision_rf_test, "\n")
+cat("Overall Recall on the test set:", overall_recall_rf_test, "\n")
+cat("Overall F1-Score on the test set:", overall_f1_score_rf_test, "\n")
+cat("Cohen's Kappa on the test set:", kappa_rf_test, "\n")
+cat("Jaccard Index on the test set:", jaccard_index, "\n")
+```
+
+Evaluating the above results, it can be interpreted that the random forest performs better in the case where wake-up time is not considered. Even though it doesn't have the highest accuracy in validation set, but it has the highest number in test set, which means it can predict new, unseen data more accurately.
+
+
+# Conclusion 
+
+Through this assignment, I was able to handle the variables that are in text format, and to derive meaningful insights from it. I found out that both the bedtime and wake-up time variables do not significantly influence the sleep efficiency. For bedtime, the metrics are better if it is considered along with other possible influential variables. Yet, for wake-up time, the metrics are better if it is not considered along with other variables. Besides, naive bayes produces better results compared to the other classification algorithms. Perhaps it's because the data for this dataset isn't a lot, so the accuracy for all the cases and classification models are quite low. 
+
+
+# Possible Problems To Investigate For Future Studies
+
+1. What are the significant factors influencing the sleep efficiency for this data set ?
+
+2. How to effectively tune the parameters of the classification models ?
+
+3. If I split the data more randomly, would the results be better ?
+
+4. Perhaps the dataset is biased ?
