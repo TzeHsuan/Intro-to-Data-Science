@@ -37,6 +37,9 @@ The above box plots are the variables that have outliers. The reason I choose to
 
 Apart from box plot, I also conduct a z-test to reinforce the outliers illustrated in the box plots. We can see that the values for the outliers are same as that detected by box plots. Furthermore, we are able to see how the number of outliers from the z-test.
 
+#### Delettion of Outlier
+I decided to delete the outliers detected by box plot. The reason why I delete those outliers is because those values are true values, unlike the missing values, so I think it will somehow affect the accuracy of the dataset and the analysis, if I use other methods to change the values. After deleting the outliers, the number of rows dropped from 452 to 431.
+<img width="918" alt="Screenshot 2024-11-04 at 3 58 28 PM" src="https://github.com/user-attachments/assets/115d0790-a428-498c-8ad1-80ffb50bebc0">
 
 
 
