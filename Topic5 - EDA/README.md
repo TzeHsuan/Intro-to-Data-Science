@@ -17,6 +17,7 @@ In order to conduct Exploratory Data Analysis (EDA), I choose to use the dataset
 ### 1. Handling Missing Data
 #### Finding unique characters
 <img width="915" alt="Screenshot 2024-11-04 at 3 50 17 PM" src="https://github.com/user-attachments/assets/fb923e36-72bf-41f5-a3a2-e6b581108eb9">
+
 #### Mean Imputation
 <img width="918" alt="Screenshot 2024-11-04 at 3 52 12 PM" src="https://github.com/user-attachments/assets/463ff083-3066-4361-b9ed-0f4a9579c6d8">
 Since there are a total number of 64 rows and 4 columns with missing values, I decide to use mean imputation to fill in those missing values. If I choose to delete those rows, I think there will be too many rows to be deleted, and this might affect the analysis’s accuracy. Moreover, due to the fact that the true values are unknown, we cannot conduct MAE or R-Squared tests to see the accuracy of mean imputation. However, the number of possible values of those columns are small, and the ranges are also small. Thus, I believe using mean would give highly accurate imputations.
