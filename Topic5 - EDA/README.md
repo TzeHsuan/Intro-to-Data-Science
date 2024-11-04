@@ -42,7 +42,18 @@ I decided to delete the outliers detected by box plot. The reason why I delete t
 <img width="918" alt="Screenshot 2024-11-04 at 3 58 28 PM" src="https://github.com/user-attachments/assets/115d0790-a428-498c-8ad1-80ffb50bebc0">
 
 
+### 3. Data Summarization
+#### Check data type & structure
+<img width="918" alt="Screenshot 2024-11-04 at 4 00 22 PM" src="https://github.com/user-attachments/assets/3190bdaf-6d26-4bf7-924a-560475d5857e">
 
+The above functions allow us to see that this dataset is a dataframe. After data cleaning, the number of rows decreased to 431, and the number of variables is 15. The structure function demonstrates each variable’s value format (whether it’s an integer, character, or number), and also the first few rows’ values.
 
+#### Summary
+<img width="918" alt="Screenshot 2024-11-04 at 4 01 19 PM" src="https://github.com/user-attachments/assets/1e33c3bd-73d3-404e-b527-0e2be128c867">
 
+I decide to use the summary function is because it provides us with a quick overview of the variables, including the minimum and maximum values, the mean, the mode, and the quartiles. For variables in the type of characters, the function shows the number of rows (length), the class, and the mode.
+
+<img width="916" alt="Screenshot 2024-11-04 at 4 02 25 PM" src="https://github.com/user-attachments/assets/a5888bd0-1f07-49bc-a87c-95ab47d57d04">
+
+The describe function provides us with descriptive statistical information about the variables. The information include the mean, the standard deviation (sd), the median, the trimmed mean (trimmed), the mean absolute deviation (mad), the minimum and maximum values, the range, the skewness (skew), the kurtosis, and the standard error (se).
 
