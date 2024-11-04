@@ -113,19 +113,19 @@ This bar plot compares the percentage of the sleep stages (deep sleep, light sle
 #### Linear regression
 ##### a. Scatter Plot For Sleep Duration & Sleep Efficiency
 <img width="605" alt="Screenshot 2024-11-04 at 6 37 59 PM" src="https://github.com/user-attachments/assets/54bbf01c-5ba5-48c4-b158-3ad6207dfd2a">
-<img width="828" alt="Screenshot 2024-11-04 at 6 38 22 PM" src="https://github.com/user-attachments/assets/1ae253c3-a46c-48ed-bcae-04bcdbf552a6">
+<img width="605" alt="Screenshot 2024-11-04 at 6 38 22 PM" src="https://github.com/user-attachments/assets/1ae253c3-a46c-48ed-bcae-04bcdbf552a6">
 
 The scatter plot with regression line shows the correlation of 2 variables. By looking at the plot and the r-value, we can say that sleep duration and sleep efficiency does not have any correlation.
 
 ##### b. Scatter Plot For Sleep Efficiency & REM Sleep Percentage
 <img width="619" alt="Screenshot 2024-11-04 at 6 39 07 PM" src="https://github.com/user-attachments/assets/02686162-05ce-4860-802f-a34194a83b9e">
-<img width="826" alt="Screenshot 2024-11-04 at 6 39 22 PM" src="https://github.com/user-attachments/assets/902a3436-5795-4b5f-afae-8adaac8cc441">
+<img width="619" alt="Screenshot 2024-11-04 at 6 39 22 PM" src="https://github.com/user-attachments/assets/902a3436-5795-4b5f-afae-8adaac8cc441">
 
 The scatter plot for sleep efficiency and REM sleep percentage implies that they have a very weak positive correlation. Yet, the r-value tells us that they almost have no correlation at all (very close to 0).
 
 ##### c. Scatter Plot For Sleep Efficiency & Age
 <img width="598" alt="Screenshot 2024-11-04 at 6 40 04 PM" src="https://github.com/user-attachments/assets/650197fe-4db0-4c57-9ad2-fd2363d240f8">
-<img width="828" alt="Screenshot 2024-11-04 at 6 40 18 PM" src="https://github.com/user-attachments/assets/f1fb7168-a1bb-457e-a939-cf9ccc58dace">
+<img width="598" alt="Screenshot 2024-11-04 at 6 40 18 PM" src="https://github.com/user-attachments/assets/f1fb7168-a1bb-457e-a939-cf9ccc58dace">
 
 By both the scatter plot and r-value, it can be inferred that the sleep efficiency and age has a weak positive correlation.
 
