@@ -35,6 +35,8 @@ The above box plots are the variables that have outliers. The reason I choose to
 <img width="500" alt="Screenshot 2024-11-04 at 3 56 32 PM" src="https://github.com/user-attachments/assets/e8102b46-166d-4ec4-8406-48296d1185ef">
 
 
+Apart from box plot, I also conduct a z-test to reinforce the outliers illustrated in the box plots. We can see that the values for the outliers are same as that detected by box plots. Furthermore, we are able to see how the number of outliers from the z-test.
+
 
 
 
